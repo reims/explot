@@ -35,6 +35,8 @@ struct graph_desc_2d final
 struct plot_command_2d final
 {
   std::vector<graph_desc_2d> graphs;
+  range_setting x_range;
+  range_setting y_range;
 };
 
 struct csv_data_3d

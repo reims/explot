@@ -4,9 +4,383 @@
 #include <charconv>
 #include <cassert>
 #include <fmt/format.h>
+#include <lexy/dsl.hpp>
+#include <lexy/callback.hpp>
+#include <lexy/input/string_input.hpp>
+#include <lexy/action/parse.hpp>
+#include <lexy_ext/report_error.hpp>
+#include <utility>
 
 namespace
 {
+namespace dsl = lexy::dsl;
+using namespace explot;
+
+namespace r
+{
+using lexeme = lexy::string_lexeme<lexy::utf8_char_encoding>;
+
+struct identifier : lexy::token_production
+{
+  static constexpr auto rule = dsl::list(dsl::ascii::alpha);
+  static constexpr auto value = lexy::noop;
+};
+
+struct decimal : lexy::token_production
+{
+  static constexpr auto rule = dsl::peek(dsl::digit<>)
+                               >> dsl::digits<> + dsl::opt(dsl::period >> dsl::digits<>);
+  static constexpr auto value = lexy::noop;
+};
+
+constexpr auto op_plus = dsl::op(dsl::lit_c<'+'>);
+constexpr auto op_minus = dsl::op(dsl::lit_c<'-'>);
+constexpr auto op_mult = dsl::op(dsl::lit_c<'*'>);
+constexpr auto op_div = dsl::op(dsl::lit_c<'/'>);
+
+struct expr;
+
+struct var_or_fun_call
+{
+  static constexpr auto
+      rule = dsl::p<identifier> >> dsl::if_(dsl::parenthesized.opt_list(dsl::recurse<expr>,
+                                                                        dsl::sep(dsl::comma)));
+  static constexpr auto value = lexy::noop;
+};
+
+struct atom
+{
+  static constexpr auto rule =
+      dsl::p<decimal> | dsl::parenthesized(dsl::recurse<expr>) | dsl::p<var_or_fun_call>;
+  static constexpr auto value = lexy::noop;
+};
+
+struct expr : lexy::expression_production
+{
+  static constexpr auto atom = dsl::p<r::atom>;
+  static constexpr auto whitespace = dsl::ascii::space;
+  static constexpr auto max_recursion_depth = 19;
+
+  struct infix_op : dsl::prefix_op
+  {
+    static constexpr auto op = op_plus / op_minus;
+    using operand = dsl::atom;
+    static constexpr auto value = lexy::noop;
+  };
+
+  struct mult_op : dsl::infix_op_left
+  {
+    static constexpr auto op = op_mult / op_div;
+    using operand = infix_op;
+    static constexpr auto value = lexy::noop;
+  };
+
+  struct add_op : dsl::infix_op_left
+  {
+    static constexpr auto op = op_plus / op_minus;
+    using operand = mult_op;
+    static constexpr auto value = lexy::noop;
+  };
+
+  using operation = add_op;
+
+  static constexpr auto value = lexy::noop;
+};
+
+struct captured_expr
+{
+  static constexpr auto rule = dsl::position + dsl::p<expr> + dsl::position;
+  static constexpr auto value = lexy::construct<lexeme>;
+};
+
+struct range
+{
+  struct rvalue
+  {
+    static constexpr auto rule = dsl::opt(dsl::lit_c<'*'> | dsl::p<decimal>);
+    static constexpr auto value =
+        lexy::callback<range_value>([] { return range_value(auto_scale{}); },
+                                    [](lexy::nullopt) { return range_value(std::nullopt); },
+                                    [](const std::string &s)
+                                    {
+                                      float f = 0.0;
+                                      auto [_, __] =
+                                          std::from_chars(s.data(), s.data() + s.length(), f);
+                                      return range_value(f);
+                                    });
+  };
+  static constexpr auto whitespace = dsl::ascii::space;
+  static constexpr auto rule = []
+  {
+    auto value = dsl::p<rvalue>;
+    return dsl::twice(value, dsl::sep(dsl::colon));
+  }();
+  using p = std::pair<range_setting, int>;
+  static constexpr auto value = lexy::construct<range_setting>;
+};
+
+constexpr auto kw_id = dsl::identifier(dsl::ascii::alpha);
+
+struct with
+{
+  static constexpr auto whitespace = dsl::ascii::space;
+  static constexpr auto rule = LEXY_KEYWORD("with", kw_id) >> (dsl::capture(LEXY_LIT("lines"))
+                                                               | dsl::capture(LEXY_LIT("points")));
+  static constexpr auto value = lexy::callback<mark_type>(
+      [](const auto &s)
+      {
+        std::string ss(s.begin(), s.end());
+        if (ss == "lines")
+        {
+          return mark_type::lines;
+        }
+        else
+        {
+          return mark_type::points;
+        }
+      });
+};
+
+struct usingp
+{
+  struct coord
+  {
+    static constexpr auto rule =
+        dsl::parenthesized(dsl::p<captured_expr>) | dsl::capture(dsl::digits<>);
+    static constexpr auto value = lexy::callback<std::string>(
+        lexy::as_string<std::string>, [](const auto &s) { return fmt::format("column({})", s); });
+  };
+  static constexpr auto whitespace = dsl::ascii::space;
+  static constexpr auto rule =
+      dsl::if_(LEXY_KEYWORD("using", kw_id) >> dsl::list(dsl::p<coord>, dsl::sep(dsl::colon)));
+  static constexpr auto value = lexy::as_list<std::vector<std::string>>;
+};
+
+constexpr auto str_delim = dsl::lit_c<'"'> | dsl::lit_c<'\''>;
+
+struct string
+{
+  static constexpr auto rule = dsl::delimited(str_delim)(-dsl::unicode::control);
+  static constexpr auto value = lexy::as_string<std::string>;
+};
+
+struct plot
+{
+  static constexpr auto whitespace = dsl::ascii::space;
+
+  struct data_ast
+  {
+    std::string val;
+    bool is_path;
+  };
+
+  struct data
+  {
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<string>
+                                 | dsl::peek_not(str_delim) >> dsl::p<captured_expr>;
+    static constexpr auto value = lexy::callback<data_ast>(
+        [](const std::string &s) {
+          return data_ast{s, true};
+        },
+        [](lexeme s) {
+          return data_ast{std::string(s.begin(), s.end()), false};
+        });
+  };
+
+  struct graph
+  {
+    static constexpr auto whitespace = dsl::ascii::space;
+    struct directives
+    {
+      static constexpr auto whitespace = dsl::ascii::space;
+      static constexpr auto rule =
+          dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
+                                   dsl::peek(LEXY_KEYWORD("using", kw_id)) >> dsl::p<usingp>);
+      static constexpr auto value = lexy::fold_inplace<graph_desc_2d>(
+          [] { return graph_desc_2d{}; }, [](auto &g, mark_type m) { g.mark = m; },
+          [](auto &g, const std::vector<std::string> &exprs)
+          {
+            auto &d = std::get<csv_data_2d>(g.data);
+            d.expressions[0] = exprs[0];
+            d.expressions[1] = exprs[1];
+          });
+    };
+
+    static constexpr auto rule = dsl::p<data> + dsl::p<directives>;
+    static constexpr auto value = lexy::callback<graph_desc_2d>(
+        [](data_ast d, graph_desc_2d g)
+        {
+          if (d.is_path)
+          {
+            if (std::holds_alternative<csv_data_2d>(g.data))
+            {
+              std::get<csv_data_2d>(g.data).path = std::move(d.val);
+            }
+            else
+            {
+              g.data = csv_data_2d{std::move(d.val), {"column(1)", "column(2)"}};
+            }
+          }
+          else
+          {
+            assert(std::holds_alternative<std::string>(g.data));
+            g.data = std::move(d.val);
+          }
+          return g;
+        });
+  };
+
+  struct ranges
+  {
+    static constexpr auto rule = dsl::opt(dsl::list(dsl::peek(dsl::lit_c<'['>) >> dsl::p<range>));
+    static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
+  };
+
+  struct graphs
+  {
+    static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
+    static constexpr auto value = lexy::as_list<std::vector<graph_desc_2d>>;
+  };
+
+  static constexpr auto rule =
+      LEXY_KEYWORD("plot", kw_id) + dsl::p<ranges> + dsl::p<graphs> + dsl::eof;
+  static constexpr auto value = lexy::callback<plot_command_2d>(
+      [](const std::vector<range_setting> &rs, std::vector<graph_desc_2d> gs)
+      {
+        auto cmd = plot_command_2d{};
+        if (rs.size() > 0)
+        {
+          cmd.x_range = rs[0];
+        }
+        if (rs.size() > 1)
+        {
+          cmd.y_range = rs[1];
+        }
+        cmd.graphs = std::move(gs);
+        return cmd;
+      });
+};
+
+struct splot
+{
+  static constexpr auto whitespace = dsl::ascii::space;
+
+  struct data_ast
+  {
+    std::string val;
+    bool is_path;
+  };
+
+  struct data
+  {
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<string>
+                                 | dsl::peek_not(str_delim) >> dsl::p<captured_expr>;
+    static constexpr auto value = lexy::callback<data_ast>(
+        [](const std::string &s) {
+          return data_ast{s, true};
+        },
+        [](lexeme s) {
+          return data_ast{std::string(s.begin(), s.end()), false};
+        });
+  };
+
+  struct graph
+  {
+    static constexpr auto whitespace = dsl::ascii::space;
+    struct directives
+    {
+      static constexpr auto whitespace = dsl::ascii::space;
+      static constexpr auto rule =
+          dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
+                                   dsl::peek(LEXY_KEYWORD("using", kw_id)) >> dsl::p<usingp>);
+      static constexpr auto value = lexy::fold_inplace<graph_desc_3d>(
+          [] { return graph_desc_3d{}; }, [](auto &g, mark_type m) { g.mark = m; },
+          [](auto &g, const std::vector<std::string> &exprs)
+          {
+            auto &d = std::get<csv_data_3d>(g.data);
+            d.expressions[0] = exprs[0];
+            d.expressions[1] = exprs[1];
+            d.expressions[2] = exprs[2];
+          });
+    };
+
+    static constexpr auto rule = dsl::p<data> + dsl::p<directives>;
+    static constexpr auto value = lexy::callback<graph_desc_3d>(
+        [](data_ast d, graph_desc_3d g)
+        {
+          if (d.is_path)
+          {
+            if (std::holds_alternative<csv_data_3d>(g.data))
+            {
+              std::get<csv_data_3d>(g.data).path = std::move(d.val);
+            }
+            else
+            {
+              g.data = csv_data_3d{std::move(d.val), {"column(1)", "column(2)"}};
+            }
+          }
+          else
+          {
+            assert(std::holds_alternative<std::string>(g.data));
+            g.data = std::move(d.val);
+          }
+          return g;
+        });
+  };
+
+  struct ranges
+  {
+    static constexpr auto rule = dsl::opt(dsl::list(dsl::peek(dsl::lit_c<'['>) >> dsl::p<range>));
+    static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
+  };
+
+  struct graphs
+  {
+    static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
+    static constexpr auto value = lexy::as_list<std::vector<graph_desc_3d>>;
+  };
+
+  static constexpr auto rule =
+      LEXY_KEYWORD("plot", kw_id) + dsl::p<ranges> + dsl::p<graphs> + dsl::eof;
+  static constexpr auto value = lexy::callback<plot_command_3d>(
+      [](const std::vector<range_setting> &rs, std::vector<graph_desc_3d> gs)
+      {
+        auto cmd = plot_command_3d{};
+        if (rs.size() > 0)
+        {
+          cmd.x_range = rs[0];
+        }
+        if (rs.size() > 1)
+        {
+          cmd.y_range = rs[1];
+        }
+        cmd.graphs = std::move(gs);
+        return cmd;
+      });
+};
+
+struct quit
+{
+  static constexpr auto rule = LEXY_KEYWORD("quit", kw_id) + dsl::eof;
+  static constexpr auto value = lexy::constant(quit_command{});
+};
+
+struct true_
+{
+  static constexpr auto rule = LEXY_KEYWORD("true", kw_id);
+  static constexpr auto value = lexy::constant(true);
+};
+struct false_
+{
+  static constexpr auto rule = LEXY_KEYWORD("false", kw_id);
+  static constexpr auto value = lexy::constant(false);
+};
+struct boolean
+{
+  static constexpr auto rule = dsl::p<true_> | dsl::p<false_>;
+  static constexpr auto value = lexy::forward<bool>;
+};
+} // namespace r
 std::vector<std::string> split_string(std::string_view s)
 {
   auto result = std::vector<std::string>();
@@ -26,138 +400,8 @@ std::vector<std::string> split_string(std::string_view s)
   return result;
 }
 
-static constexpr char path_regex[] = "\\s*\"([a-zA-Z\\-\\._/]+)\"\\s*";
-static constexpr char kw_regex[] = "with|using|,";
-static constexpr char using_2d_regex[] = "using ((\\([^:]+)|([0-9]+)):((\\([^:]+)|([0-9]+))\\s*";
-static constexpr char using_3d_regex[] =
-    "using ((\\([^:]+)|([0-9]+)):((\\([^:]+)|([0-9]+)):((\\([^:]+)|([0-9]+))\\s*";
-static constexpr char with_regex[] = "with (lines|points)\\s*";
 static constexpr char settings_path_regex[] = "(\\s+[a-zA-z]+)+";
 
-template <typename T>
-struct match final
-{
-  std::size_t matched;
-  T value;
-  match(std::size_t matched, T value) : matched(matched), value(std::move(value)) {}
-};
-
-match<explot::data_source_2d> match_data_2d(std::string_view params)
-{
-  using namespace explot;
-  if (auto [whole, path] = ctre::starts_with<path_regex>(params); whole)
-  {
-    return match(whole.size(), data_source_2d(csv_data_2d{.path = std::string(path),
-                                                          .expressions = {"$0", "$1"}}));
-  }
-  else
-  {
-    auto [kw] = ctre::search<kw_regex>(params);
-    auto end = kw ? kw.begin() : params.end();
-    return match(static_cast<std::size_t>(std::distance(params.begin(), end)),
-                 data_source_2d(std::string(params.begin(), end)));
-  }
-}
-
-match<explot::data_source_3d> match_data_3d(std::string_view params)
-{
-  using namespace explot;
-  if (auto [whole, path] = ctre::starts_with<path_regex>(params); whole)
-  {
-    return match(whole.size(), data_source_3d(csv_data_3d{.path = std::string(path),
-                                                          .expressions = {"$0", "$1", "$2"}}));
-  }
-  else
-  {
-    auto [kw] = ctre::search<kw_regex>(params);
-    auto end = kw ? kw.begin() : params.end();
-    return match(static_cast<std::size_t>(std::distance(params.begin(), end)),
-                 data_source_3d(std::string(params.begin(), end)));
-  }
-}
-
-std::size_t match_using_2d(std::string_view params, explot::csv_data_2d &csv)
-{
-  if (auto [whole, x_str, x_expr, x_idx, y_str, y_expr, y_idx] =
-          ctre::starts_with<using_2d_regex>(params);
-      whole)
-  {
-    if (x_expr)
-    {
-      csv.expressions[0] = x_expr.view().substr(1, x_expr.size() - 2);
-    }
-    else if (x_idx)
-    {
-      csv.expressions[0] = fmt::format("${}", x_idx);
-    }
-    if (y_expr)
-    {
-      csv.expressions[1] = y_expr.view().substr(1, y_expr.size() - 2);
-    }
-    else if (y_idx)
-    {
-      csv.expressions[1] = fmt::format("${}", y_idx);
-    }
-    return whole.size();
-  }
-  return 0U;
-}
-
-std::size_t match_using_3d(std::string_view params, explot::csv_data_3d &csv)
-{
-  if (auto [whole, x_str, x_expr, x_idx, y_str, y_expr, y_idx, z_str, z_expr, z_idx] =
-          ctre::starts_with<using_3d_regex>(params);
-      whole)
-  {
-    if (x_expr)
-    {
-      csv.expressions[0] = x_expr.view().substr(1, x_expr.size() - 2);
-    }
-    else if (x_idx)
-    {
-      csv.expressions[0] = fmt::format("${}", x_idx);
-    }
-    if (y_expr)
-    {
-      csv.expressions[1] = y_expr.view().substr(1, y_expr.size() - 2);
-    }
-    else if (y_idx)
-    {
-      csv.expressions[1] = fmt::format("${}", y_idx);
-    }
-    if (z_expr)
-    {
-      csv.expressions[2] = z_expr.view().substr(1, z_expr.size() - 2);
-    }
-    else if (z_idx)
-    {
-      csv.expressions[2] = fmt::format("${}", z_idx);
-    }
-    return whole.size();
-  }
-  return 0U;
-}
-
-std::optional<match<explot::mark_type>> match_mark(std::string_view params)
-{
-  using namespace explot;
-  if (auto [whole, mark_str] = ctre::starts_with<with_regex>(params); whole)
-  {
-    if (mark_str == "lines")
-    {
-      return match(whole.size(), mark_type::lines);
-    }
-    else if (mark_str == "points")
-    {
-      return match(whole.size(), mark_type::points);
-    }
-    else
-    {
-      return std::nullopt;
-    }
-  }
-  return std::nullopt;
-}
 } // namespace
 
 namespace explot
@@ -165,6 +409,7 @@ namespace explot
 std::optional<command> parse_command(const char *cmd)
 {
   auto line = std::string_view(cmd);
+  auto input = lexy::string_input<lexy::utf8_char_encoding>(line.begin(), line.end());
   if (line.starts_with("quit"))
   {
     return quit_command();
@@ -199,89 +444,29 @@ std::optional<command> parse_command(const char *cmd)
   }
   else if (line.starts_with("plot "))
   {
-    auto result = plot_command_2d();
-    auto params = line.substr(5);
-    while (!params.empty())
+    auto matched = lexy::parse<r::plot>(input, lexy_ext::report_error);
+    fmt::print("matched: {}\n", matched.is_success());
+    if (matched.is_success())
     {
-      if (params[0] == ',')
-      {
-        params = params.substr(1);
-      }
-      auto [matched, data] = match_data_2d(params);
-      params = params.substr(matched);
-      auto mark = mark_type::points;
-      while (!params.empty() && params[0] != ',')
-      {
-        if (std::holds_alternative<csv_data_2d>(data))
-        {
-          if (auto matched = match_using_2d(params, std::get<csv_data_2d>(data)); matched > 0)
-          {
-            params = params.substr(matched);
-            continue;
-          }
-        }
-        if (auto mark_match = match_mark(params); mark_match)
-        {
-          auto [matched, new_mark] = mark_match.value();
-          mark = new_mark;
-          params = params.substr(matched);
-        }
-        else
-        {
-          return std::nullopt;
-        }
-      }
-      result.graphs.push_back({data, mark});
+      return matched.value();
     }
-    return result;
+    else
+    {
+      return std::nullopt;
+    }
   }
   else if (line.starts_with("splot"))
   {
-    auto result = plot_command_3d();
-    auto params = line.substr(6);
-    if (auto x_range_match = match_range(params); x_range_match)
+    auto matched = lexy::parse<r::splot>(input, lexy_ext::report_error);
+    fmt::print("matched: {}\n", matched.is_success());
+    if (matched.is_success())
     {
-      result.x_range = x_range_match.value().setting;
-      params = params.substr(x_range_match.value().match);
-      if (auto y_range_match = match_range(params); y_range_match)
-      {
-        result.y_range = y_range_match.value().setting;
-        params = params.substr(y_range_match.value().match);
-      }
+      return matched.value();
     }
-    while (!params.empty())
+    else
     {
-      if (params[0] == ',')
-      {
-        params = params.substr(1);
-      }
-      auto [matched, data] = match_data_3d(params);
-      params = params.substr(matched);
-      auto mark = mark_type::points;
-      while (!params.empty() && params[0] != ',')
-      {
-        if (std::holds_alternative<csv_data_3d>(data))
-        {
-          if (auto matched = match_using_3d(params, std::get<csv_data_3d>(data)); matched > 0)
-          {
-            params = params.substr(matched);
-            continue;
-          }
-        }
-        if (auto mark_match = match_mark(params); mark_match)
-        {
-          auto [matched, new_mark] = mark_match.value();
-          mark = new_mark;
-          params = params.substr(matched);
-        }
-        else
-        {
-          return std::nullopt;
-        }
-      }
-      result.graphs.push_back({data, mark});
+      return std::nullopt;
     }
-    return result;
   }
   else
   {

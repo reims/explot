@@ -22,7 +22,12 @@ add_executable(explot
   plot3d.cpp
   coordinate_system_3d.cpp
   ../msdfgen/ext/import-font.cpp
-  )
+)
+
+include(FetchContent)
+FetchContent_Declare(lexy URL https://lexy.foonathan.net/download/lexy-src.zip)
+FetchContent_MakeAvailable(lexy)
+target_link_libraries(explot PRIVATE foonathan::lexy)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
