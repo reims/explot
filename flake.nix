@@ -11,13 +11,15 @@
         devShell.${system}= pkgs.mkShell
           {
             nativeBuildInputs = with pkgs; [
-              clang_15
               clang-tools_15
+              clang_15
+              llvmPackages_15.libcxx
               cmake
               fmt
               ctre
               glfw
               glew
+              glew.dev
               freetype
               libGL
               libglvnd

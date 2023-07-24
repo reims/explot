@@ -45,7 +45,7 @@ find_package(OpenGL REQUIRED)
 target_link_libraries(explot PRIVATE OpenGL::GL)
 
 find_package(GLEW REQUIRED)
-target_link_libraries(explot PRIVATE GLEW)
+target_link_libraries(explot PRIVATE GLEW::GLEW)
 
 find_package(glfw3 3.3 REQUIRED)
 target_link_libraries(explot PRIVATE glfw)
