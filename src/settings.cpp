@@ -22,6 +22,7 @@ struct settings_t final
     char separator = ',';
   } datafile;
   view_range_2d range = {};
+  bool parametric = false;
 } settings_v;
 
 template <typename Value>
@@ -37,14 +38,19 @@ bool set_(Value &value, std::string_view str)
 }
 
 template <>
+bool set_(bool &value, std::string_view str)
+{
+  value = true;
+  return true;
+}
+
+template <>
 bool set_<samples_setting>(samples_setting &setting, std::string_view s)
 {
-  fmt::print("parsing {}\n", s);
   static constexpr const char re[] = R"re(\s*(\d+)(\s*,\s*(\d+))?)re";
   if (auto [whole, x_str, _, y_str] = ctre::starts_with<re>(s); whole)
   {
     std::size_t x = 0;
-    fmt::print("x_str: {}\n", x_str);
     auto [x_ptr, x_errc] = std::from_chars(x_str.begin(), x_str.end(), x);
     if (x_errc != std::errc() || x < 2)
     {
@@ -53,7 +59,6 @@ bool set_<samples_setting>(samples_setting &setting, std::string_view s)
     std::size_t y = x;
     if (y_str)
     {
-      fmt::print("y_str {}\n", y_str);
       auto [y_ptr, y_errc] = std::from_chars(y_str.begin(), y_str.end(), y);
       if (y_errc != std::errc() || y < 2)
       {
@@ -177,6 +182,10 @@ std::optional<settings_value> get_value(std::span<const std::string> path)
   {
     return settings_value(settings_v.range.y);
   }
+  else if (path.size() == 1 && path[0] == "parametric")
+  {
+    return settings_value(settings_v.parametric);
+  }
   else
   {
     return std::nullopt;
@@ -216,6 +225,8 @@ bool set(std::span<const std::string> path, std::string_view value)
 
 samples_setting samples() { return settings_v.samples; }
 samples_setting isosamples() { return settings_v.isosamples; }
+
+bool parametric() { return settings_v.parametric; }
 
 namespace datafile
 {

@@ -18,13 +18,19 @@ struct csv_data_2d final
   std::array<std::string, 2> expressions;
 };
 
+struct parametric_data_2d final
+{
+  std::string x_expression;
+  std::string y_expression;
+};
+
 enum struct mark_type
 {
   points,
   lines
 };
 
-using data_source_2d = std::variant<std::string, csv_data_2d>;
+using data_source_2d = std::variant<std::string, csv_data_2d, parametric_data_2d>;
 
 struct graph_desc_2d final
 {
@@ -45,7 +51,14 @@ struct csv_data_3d
   std::array<std::string, 3> expressions;
 };
 
-using data_source_3d = std::variant<std::string, csv_data_3d>;
+struct parametric_data_3d final
+{
+  std::string x_expression;
+  std::string y_expression;
+  std::string z_expression;
+};
+
+using data_source_3d = std::variant<std::string, csv_data_3d, parametric_data_3d>;
 
 struct graph_desc_3d final
 {

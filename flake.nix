@@ -11,9 +11,9 @@
         devShell.${system}= pkgs.mkShell
           {
             nativeBuildInputs = with pkgs; [
-              clang-tools_15
-              clang_15
-              llvmPackages_15.libcxx
+              clang-tools_16
+              clang_16
+              llvmPackages_16.libcxx
               cmake
               fmt
               ctre

@@ -75,6 +75,7 @@ static constexpr auto uimain = [](auto commands)
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  glfwWindowHint(GLFW_CONTEXT_ROBUSTNESS, GLFW_LOSE_CONTEXT_ON_RESET);
 
   auto *window = glfwCreateWindow(640, 480, "explot", nullptr, nullptr);
   if (window == nullptr)
@@ -95,13 +96,14 @@ static constexpr auto uimain = [](auto commands)
   init_events(window);
 
   rxcpp::subjects::subject<unit> frames_subject;
-  auto frames = frames_subject.get_observable();
+  auto frames = frames_subject.get_observable() | rx::publish() | rx::ref_count();
   auto frames_out = frames_subject.get_subscriber();
   rxcpp::schedulers::run_loop rl;
   auto on_run_loop = rx::observe_on_run_loop(rl);
 
-  rxcpp::subjects::subject<rect> screen_space_subject;
-  auto screen_space = screen_space_subject.get_observable();
+  rxcpp::subjects::behavior<rect> screen_space_subject(rect{});
+  auto screen_space = screen_space_subject.get_observable() | rx::distinct_until_changed();
+  //                      | rx::publish() | rx::ref_count();
   auto screen_space_out = screen_space_subject.get_subscriber();
 
   auto renderers = std::vector<rx::observable<unit>>{};
@@ -135,6 +137,30 @@ static constexpr auto uimain = [](auto commands)
                             return unit{};
                           });
   renderers.push_back(set_renderer);
+  auto drag_renderer =
+      drags()
+      | rx::transform(
+          [=](auto ds)
+          {
+            return rx::scope(
+                       []() { return rx::resource<drag_render_state>(make_drag_render_state()); },
+                       [=](rx::resource<drag_render_state> res)
+                       {
+                         return frames | rx::observe_on(on_run_loop)
+                                | rx::take_until(ds | rx::last())
+                                | rx::with_latest_from(
+                                    [res = std::move(res)](unit, const rect &screen, const drag &d)
+                                    {
+                                      auto screen_to_clip = transform(screen, clip_rect);
+                                      draw(const_get(res), drag_to_rect(d, screen.upper_bounds.y),
+                                           screen_to_clip, 1.0f);
+                                      return unit{};
+                                    },
+                                    screen_space, ds);
+                       })
+                   | rx::subscribe_on(on_run_loop);
+          })
+      | rx::switch_on_next();
 
   auto plot_commands = commands | rx::filter(is_plot_command)
                        | rx::transform([](const command &cmd) { return as_plot_command(cmd); });
@@ -263,33 +289,6 @@ static constexpr auto uimain = [](auto commands)
   auto plot_renderers = plot_renderer.as_dynamic().merge(splot_renderer) | rx::switch_on_next();
   renderers.push_back(plot_renderers);
 
-  auto drag_renderer =
-      drags()
-      | rx::transform(
-          [=](auto ds)
-          {
-            return rx::scope(
-                       []() { return rx::resource<drag_render_state>(make_drag_render_state()); },
-                       [=, ds = ds | rx::publish()
-                                | rx::ref_count()](rx::resource<drag_render_state> res)
-                       {
-                         return frames | rx::take_until(ds | rx::last())
-                                | rx::observe_on(on_run_loop)
-                                | rx::with_latest_from(
-                                    [res = std::move(res)](unit, const rect &screen, const drag &d)
-                                    {
-                                      auto screen_to_clip = transform(screen, clip_rect);
-                                      draw(const_get(res), drag_to_rect(d, screen.upper_bounds.y),
-                                           screen_to_clip, 1.0f);
-                                      return unit{};
-                                    },
-                                    screen_space, ds);
-                       })
-                   | rx::subscribe_on(on_run_loop);
-          })
-      | rx::switch_on_next();
-  renderers.push_back(drag_renderer);
-
   auto fps_renderer = rx::scope(
       []()
       {
@@ -335,7 +334,7 @@ static constexpr auto uimain = [](auto commands)
                    })
                | rx::switch_on_next();
       });
-  renderers.push_back(fps_renderer);
+  // renderers.push_back(fps_renderer);
 
   rx::composite_subscription lifetime;
   rx::iterate(renderers) | rx::merge() | rx::subscribe<unit>(lifetime, [](unit) {});
@@ -345,6 +344,7 @@ static constexpr auto uimain = [](auto commands)
 
   while (!glfwWindowShouldClose(window))
   {
+    // fmt::print("start frame\n");
     glfwPollEvents();
     glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -360,7 +360,8 @@ static constexpr auto uimain = [](auto commands)
     {
       rl.dispatch();
     }
-
+    glFlush();
+    // fmt::print("end frame\n");
     glfwSwapBuffers(window);
   }
 
@@ -378,9 +379,10 @@ int main()
   auto cmd_subscriber = cmd_subject.get_subscriber();
 
   linenoiseHistorySetMaxLen(100);
-  linenoiseHistoryLoad("build/history");
+  linenoiseHistoryLoad("build/src/history");
 
-  auto uithread = std::jthread(uimain, cmd_subject.get_observable());
+  auto uithread =
+      std::jthread(uimain, cmd_subject.get_observable() | rx::publish() | rx::ref_count());
 
   for (auto line_ptr = std::unique_ptr<char>(linenoise("> ")); line_ptr != nullptr;
        line_ptr.reset(linenoise("> ")))
@@ -401,7 +403,7 @@ int main()
     }
   }
 
-  linenoiseHistorySave("build/history");
+  linenoiseHistorySave("build/src/history");
 
   return 0;
 }

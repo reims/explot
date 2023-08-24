@@ -46,6 +46,37 @@ void  main()
   return program;
 }
 
+program_handle program_for_parametric_data_2d(std::string_view x_expr, std::string_view y_expr)
+{
+  static constexpr auto shader_source_fmt = R"(#version 330 core
+
+uniform float scale;
+
+out vec3 v;
+
+void  main()
+{{
+  float t = scale * gl_InstanceID;
+  float x_value = {};
+  float y_value = {};
+  v = vec3(x_value, y_value, 0.0);
+}}
+)";
+
+  auto shader_source = fmt::format(shader_source_fmt, x_expr, y_expr);
+  auto shader = glCreateShader(GL_VERTEX_SHADER);
+  auto shader_src_ptr = shader_source.c_str();
+  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
+  glCompileShader(shader);
+  auto program = make_program();
+  glAttachShader(program, shader);
+  static constexpr const char *varying = "v";
+  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
+  glLinkProgram(program);
+  glDeleteShader(shader);
+  return program;
+}
+
 program_handle program_for_functional_data_3d_x(std::string_view expr)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
@@ -110,6 +141,82 @@ void  main()
   auto program = make_program();
   glAttachShader(program, shader);
   static constexpr const char *varying = "v";
+  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
+  glLinkProgram(program);
+  glDeleteShader(shader);
+  return program;
+}
+
+program_handle program_for_parametric_data_3d_u(std::string_view x_expr, std::string_view y_expr,
+                                                std::string_view z_expr)
+{
+  static constexpr auto shader_source_fmt = R"shader(#version 330 core
+
+uniform int num_points_per_line;
+uniform float min_u;
+uniform float step_u;
+uniform float min_v;
+uniform float step_v;
+
+out vec3 p;
+
+void  main()
+{{
+  float u = min_u + floor(gl_VertexID / num_points_per_line) * step_u;
+  float v = min_v + (gl_VertexID % num_points_per_line) * step_v;
+  float x = {};
+  float y = {};
+  float z = {};
+  p = vec3(x, y, z);
+}}
+)shader";
+
+  const auto shader_source = fmt::format(shader_source_fmt, x_expr, y_expr, z_expr);
+  auto shader = glCreateShader(GL_VERTEX_SHADER);
+  auto shader_src_ptr = shader_source.c_str();
+  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
+  glCompileShader(shader);
+  auto program = make_program();
+  glAttachShader(program, shader);
+  static constexpr const char *varying = "p";
+  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
+  glLinkProgram(program);
+  glDeleteShader(shader);
+  return program;
+}
+
+program_handle program_for_parametric_data_3d_v(std::string_view x_expr, std::string_view y_expr,
+                                                std::string_view z_expr)
+{
+  static constexpr auto shader_source_fmt = R"shader(#version 330 core
+
+uniform int num_points_per_line;
+uniform float min_u;
+uniform float step_u;
+uniform float min_v;
+uniform float step_v;
+
+out vec3 p;
+
+void  main()
+{{
+  float u = min_u + (gl_VertexID % num_points_per_line) * step_u;
+  float v = min_v + floor(gl_VertexID / num_points_per_line) * step_v;
+  float x = {};
+  float y = {};
+  float z = {};
+  p = vec3(x, y, z);
+}}
+)shader";
+
+  const auto shader_source = fmt::format(shader_source_fmt, x_expr, y_expr, z_expr);
+  auto shader = glCreateShader(GL_VERTEX_SHADER);
+  auto shader_src_ptr = shader_source.c_str();
+  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
+  glCompileShader(shader);
+  auto program = make_program();
+  glAttachShader(program, shader);
+  static constexpr const char *varying = "p";
   glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
   glLinkProgram(program);
   glDeleteShader(shader);
@@ -329,6 +436,27 @@ data_desc data_for_expr(std::string_view expr, std::size_t num_points)
   return data_desc(std::move(vbo), num_points);
 }
 
+data_desc parametric_data_for_exprs(std::string_view x_expr, std::string_view y_expr,
+                                    std::size_t num_points)
+{
+  auto vao = make_vao();
+  auto program = program_for_parametric_data_2d(x_expr, y_expr);
+  auto vbo = make_vbo();
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, 3 * num_points * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+  glUseProgram(program);
+  auto loc = glGetUniformLocation(program, "scale");
+  glUniform1f(loc, 1.0f);
+  glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo);
+  glBeginTransformFeedback(GL_POINTS);
+  glDrawArraysInstanced(GL_POINTS, 0, 1, num_points);
+  glEndTransformFeedback();
+  glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
+
+  return data_desc(std::move(vbo), num_points);
+}
+
 data_desc data_for_span(std::span<const float> data)
 {
   auto vbo = make_vbo();
@@ -350,7 +478,11 @@ data_desc data_from_source(const data_source_2d &src)
   assert(settings::samples().x > 0);
   return std::visit(
       overload([](const std::string &expr) { return data_for_expr(expr, settings::samples().x); },
-               [](const csv_data_2d &c) { return data_for_expressions(c.path, c.expressions); }),
+               [](const csv_data_2d &c) { return data_for_expressions(c.path, c.expressions); },
+               [](const parametric_data_2d &c) {
+                 return parametric_data_for_exprs(c.x_expression, c.y_expression,
+                                                  settings::samples().x);
+               }),
       src);
 }
 
@@ -358,6 +490,7 @@ data_desc data_3d_for_expression(std::string_view expr, settings::samples_settin
                                  settings::samples_setting samples, range_setting xrange,
                                  range_setting yrange)
 {
+  fmt::print("starting data_3d_for_expression\n");
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           xrange.lower_bound.value_or(-10.0f));
   auto max_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
@@ -379,6 +512,8 @@ data_desc data_3d_for_expression(std::string_view expr, settings::samples_settin
   const auto num_points_x = isosamples.y * samples.x;
   const auto num_points_y = isosamples.x * samples.y;
   const auto num_points = num_points_x + num_points_y;
+  fmt::print("[{}:{}] [{}:{}] is: ({},{}) s: ({},{})\n", min_x, max_x, min_y, max_y, isosamples.x,
+             isosamples.y, samples.x, samples.y);
   auto vao = make_vao();
   auto vbo = make_vbo();
   glBindVertexArray(vao);
@@ -404,6 +539,61 @@ data_desc data_3d_for_expression(std::string_view expr, settings::samples_settin
   glBeginTransformFeedback(GL_POINTS);
   glDrawArrays(GL_POINTS, 0, num_points_y);
   glEndTransformFeedback();
+  fmt::print("finished data_3d_for_expression\n");
+  return data_desc(std::move(vbo), num_points, isosamples.x + isosamples.y);
+}
+
+data_desc data_for_parametric_3d(std::string_view x_expr, std::string_view y_expr,
+                                 std::string_view z_expr, settings::samples_setting isosamples,
+                                 settings::samples_setting samples, range_setting u_range,
+                                 range_setting v_range)
+{
+  auto min_u = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
+                          u_range.lower_bound.value_or(-10.0f));
+  auto max_u = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
+                          u_range.upper_bound.value_or(10.0f));
+  auto min_v = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
+                          v_range.lower_bound.value_or(-10.0f));
+  auto max_v = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
+                          v_range.upper_bound.value_or(10.0f));
+  assert(min_u < max_u && min_v < max_v);
+  // necessary, because data_desc only handles one segment size for all
+  assert(samples.x == samples.y);
+  auto program_x = program_for_parametric_data_3d_u(x_expr, y_expr, z_expr);
+  auto program_y = program_for_parametric_data_3d_v(x_expr, y_expr, z_expr);
+  glUseProgram(program_x);
+  const auto line_step_u = (max_u - min_u) / (isosamples.x - 1);
+  const auto point_step_u = (max_u - min_u) / (samples.x - 1);
+  const auto line_step_v = (max_v - min_v) / (isosamples.y - 1);
+  const auto point_step_v = (max_v - min_v) / (samples.y - 1);
+  const auto num_points_u = isosamples.y * samples.x;
+  const auto num_points_v = isosamples.x * samples.y;
+  const auto num_points = num_points_u + num_points_v;
+  auto vao = make_vao();
+  auto vbo = make_vbo();
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, num_points * sizeof(glm::vec3), nullptr, GL_STATIC_DRAW);
+  glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo, 0, num_points_u * sizeof(glm::vec3));
+  glBeginTransformFeedback(GL_POINTS);
+  glUniform1i(glGetUniformLocation(program_x, "num_points_per_line"), samples.x);
+  glUniform1f(glGetUniformLocation(program_x, "min_u"), min_u);
+  glUniform1f(glGetUniformLocation(program_x, "step_u"), line_step_u);
+  glUniform1f(glGetUniformLocation(program_x, "min_v"), min_v);
+  glUniform1f(glGetUniformLocation(program_x, "step_v"), point_step_v);
+  glDrawArrays(GL_POINTS, 0, num_points_u);
+  glEndTransformFeedback();
+  glUseProgram(program_y);
+  glUniform1i(glGetUniformLocation(program_y, "num_points_per_line"), samples.y);
+  glUniform1f(glGetUniformLocation(program_y, "min_u"), min_u);
+  glUniform1f(glGetUniformLocation(program_y, "step_u"), point_step_u);
+  glUniform1f(glGetUniformLocation(program_y, "min_v"), min_v);
+  glUniform1f(glGetUniformLocation(program_y, "step_v"), line_step_v);
+  glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo, num_points_u * sizeof(glm::vec3),
+                    num_points_v * sizeof(glm::vec3));
+  glBeginTransformFeedback(GL_POINTS);
+  glDrawArrays(GL_POINTS, 0, num_points_v);
+  glEndTransformFeedback();
   return data_desc(std::move(vbo), num_points, isosamples.x + isosamples.y);
 }
 
@@ -417,7 +607,13 @@ data_desc data_from_source(const data_source_3d &src, const range_setting &x_ran
                                                         settings::samples(), x_range, y_range);
                         },
                         [](const csv_data_3d &c)
-                        { return data_for_expressions(c.path, c.expressions); }),
+                        { return data_for_expressions(c.path, c.expressions); },
+                        [&](const parametric_data_3d &d)
+                        {
+                          return data_for_parametric_3d(d.x_expression, d.y_expression,
+                                                        d.z_expression, settings::isosamples(),
+                                                        settings::samples(), x_range, y_range);
+                        }),
                     src);
 }
 

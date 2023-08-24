@@ -19,6 +19,8 @@ bool set(std::span<const std::string> path, std::string_view value);
 samples_setting samples();
 samples_setting isosamples();
 
+bool parametric();
+
 namespace datafile
 {
 char separator();

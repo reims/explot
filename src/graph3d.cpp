@@ -1,6 +1,7 @@
 #include "graph3d.hpp"
 #include "minmax.hpp"
 #include "overload.hpp"
+#include <fmt/format.h>
 
 namespace
 {
