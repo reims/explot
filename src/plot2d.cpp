@@ -21,7 +21,7 @@ plot2d make_plot2d(const plot_command_2d &cmd)
   for (std::size_t i = 0; i < cmd.graphs.size(); ++i)
   {
     const auto &g = cmd.graphs[i];
-    graphs[i] = graph2d(data_from_source(g.data), g.mark);
+    graphs[i] = graph2d(data_for_chart_2d(g.data, cmd), g.mark);
     auto br = bounding_rect(graphs[i]);
     if (bounding)
     {

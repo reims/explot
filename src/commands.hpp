@@ -43,6 +43,7 @@ struct plot_command_2d final
   std::vector<graph_desc_2d> graphs;
   range_setting x_range;
   range_setting y_range;
+  range_setting t_range;
 };
 
 struct csv_data_3d
@@ -71,6 +72,8 @@ struct plot_command_3d final
   std::vector<graph_desc_3d> graphs;
   range_setting x_range;
   range_setting y_range;
+  range_setting u_range;
+  range_setting v_range;
 };
 
 struct show_command final

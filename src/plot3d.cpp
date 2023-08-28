@@ -10,14 +10,13 @@
 namespace
 {
 using namespace explot;
-auto graphs_for_descs(std::span<const graph_desc_3d> descs, const range_setting &x_range,
-                      const range_setting y_range)
+auto graphs_for_descs(std::span<const graph_desc_3d> descs, const plot_command_3d &plot)
 {
   auto result = make_unique_span<graph3d>(descs.size());
 
   for (auto i = 0U; i < descs.size(); ++i)
   {
-    auto data = data_from_source(descs[i].data, x_range, y_range);
+    auto data = data_for_chart_3d(descs[i].data, plot);
     result[i] = graph3d(std::move(data), descs[i].mark);
   }
 
@@ -52,8 +51,8 @@ plot3d::plot3d(graph3d g)
 }
 
 plot3d::plot3d(const plot_command_3d &cmd)
-    : graphs(graphs_for_descs(cmd.graphs, cmd.x_range, cmd.y_range)),
-      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7)
+    : graphs(graphs_for_descs(cmd.graphs, cmd)), phase_space(bounding_rect_for_graphs(graphs)),
+      cs(phase_space, 7)
 {
 }
 

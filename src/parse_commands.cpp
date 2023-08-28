@@ -30,8 +30,9 @@ struct identifier : lexy::token_production
 
 struct decimal : lexy::token_production
 {
-  static constexpr auto rule = dsl::peek(dsl::digit<>)
-                               >> dsl::digits<> + dsl::opt(dsl::period >> dsl::digits<>);
+  static constexpr auto rule = dsl::peek(dsl::digit<> | dsl::lit_c<'-'>)
+                               >> (dsl::opt(dsl::lit_c<'-'>) + dsl::digits<>
+                                   + dsl::opt(dsl::period >> dsl::digits<>));
   static constexpr auto value = lexy::noop;
 };
 
@@ -99,15 +100,15 @@ struct range
 {
   struct rvalue
   {
-    static constexpr auto rule = dsl::opt(dsl::lit_c<'*'> | dsl::p<decimal>);
+    static constexpr auto rule = dsl::opt(dsl::lit_c<'*'> | dsl::capture(dsl::p<decimal>));
     static constexpr auto value =
         lexy::callback<range_value>([] { return range_value(auto_scale{}); },
                                     [](lexy::nullopt) { return range_value(std::nullopt); },
-                                    [](const std::string &s)
+                                    [](lexeme s)
                                     {
                                       float f = 0.0;
                                       auto [_, __] =
-                                          std::from_chars(s.data(), s.data() + s.length(), f);
+                                          std::from_chars(s.data(), s.data() + s.size(), f);
                                       return range_value(f);
                                     });
   };
@@ -115,10 +116,16 @@ struct range
   static constexpr auto rule = []
   {
     auto value = dsl::p<rvalue>;
-    return dsl::twice(value, dsl::sep(dsl::colon));
+    return dsl::square_bracketed(dsl::twice(value, dsl::sep(dsl::colon)));
   }();
   using p = std::pair<range_setting, int>;
   static constexpr auto value = lexy::construct<range_setting>;
+};
+
+struct ranges
+{
+  static constexpr auto rule = dsl::opt(dsl::list(dsl::peek(dsl::lit_c<'['>) >> dsl::p<range>));
+  static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
 };
 
 constexpr auto kw_id = dsl::identifier(dsl::ascii::alpha);
@@ -232,12 +239,6 @@ struct plot
         });
   };
 
-  struct ranges
-  {
-    static constexpr auto rule = dsl::opt(dsl::list(dsl::peek(dsl::lit_c<'['>) >> dsl::p<range>));
-    static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
-  };
-
   struct graphs
   {
     static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
@@ -327,12 +328,6 @@ struct parametric_plot
         });
   };
 
-  struct ranges
-  {
-    static constexpr auto rule = dsl::opt(dsl::list(dsl::peek(dsl::lit_c<'['>) >> dsl::p<range>));
-    static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
-  };
-
   struct graphs
   {
     static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
@@ -347,11 +342,15 @@ struct parametric_plot
         auto cmd = plot_command_2d{};
         if (rs.size() > 0)
         {
-          cmd.x_range = rs[0];
+          cmd.t_range = rs[0];
         }
         if (rs.size() > 1)
         {
-          cmd.y_range = rs[1];
+          cmd.x_range = rs[1];
+        }
+        if (rs.size() > 2)
+        {
+          cmd.y_range = rs[2];
         }
         cmd.graphs = std::move(gs);
         return cmd;
@@ -423,12 +422,6 @@ struct splot
           }
           return g;
         });
-  };
-
-  struct ranges
-  {
-    static constexpr auto rule = dsl::opt(dsl::list(dsl::peek(dsl::lit_c<'['>) >> dsl::p<range>));
-    static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
   };
 
   struct graphs
@@ -525,12 +518,6 @@ struct parametric_splot
         });
   };
 
-  struct ranges
-  {
-    static constexpr auto rule = dsl::opt(dsl::list(dsl::peek(dsl::lit_c<'['>) >> dsl::p<range>));
-    static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
-  };
-
   struct graphs
   {
     static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
@@ -545,11 +532,19 @@ struct parametric_splot
         auto cmd = plot_command_3d{};
         if (rs.size() > 0)
         {
-          cmd.x_range = rs[0];
+          cmd.u_range = rs[0];
         }
         if (rs.size() > 1)
         {
-          cmd.y_range = rs[1];
+          cmd.v_range = rs[1];
+        }
+        if (rs.size() > 2)
+        {
+          cmd.x_range = rs[2];
+        }
+        if (rs.size() > 3)
+        {
+          cmd.y_range = rs[3];
         }
         cmd.graphs = std::move(gs);
         return cmd;

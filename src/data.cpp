@@ -20,13 +20,14 @@ program_handle program_for_functional_data(std::string_view expr)
 {
   static constexpr auto shader_source_fmt = R"(#version 330 core
 
-uniform float scale;
+uniform float min_x;
+uniform float step_x;
 
 out vec3 v;
 
 void  main()
 {{
-  float x = scale * gl_InstanceID;
+  float x = min_x + step_x * gl_InstanceID;
   float value = {};
   v = vec3(x, value, 0.0);
 }}
@@ -50,13 +51,14 @@ program_handle program_for_parametric_data_2d(std::string_view x_expr, std::stri
 {
   static constexpr auto shader_source_fmt = R"(#version 330 core
 
-uniform float scale;
+uniform float min_t;
+uniform float step_t;
 
 out vec3 v;
 
 void  main()
 {{
-  float t = scale * gl_InstanceID;
+  float t = mint_t + step_t * gl_InstanceID;
   float x_value = {};
   float y_value = {};
   v = vec3(x_value, y_value, 0.0);
@@ -416,8 +418,13 @@ data_desc data_for_expressions(std::string_view path, const std::array<std::stri
   return data_for_expressions_helper(path, expressions);
 }
 
-data_desc data_for_expr(std::string_view expr, std::size_t num_points)
+data_desc data_for_expr(std::string_view expr, std::size_t num_points, range_setting xrange)
 {
+  auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
+                          xrange.lower_bound.value_or(-10.0f));
+  auto max_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
+                          xrange.upper_bound.value_or(10.0f));
+  const auto step_x = (max_x - min_x) / (num_points - 1);
   auto vao = make_vao();
   auto program = program_for_functional_data(expr);
   auto vbo = make_vbo();
@@ -425,8 +432,8 @@ data_desc data_for_expr(std::string_view expr, std::size_t num_points)
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, 3 * num_points * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
   glUseProgram(program);
-  auto loc = glGetUniformLocation(program, "scale");
-  glUniform1f(loc, 1.0f);
+  glUniform1f(glGetUniformLocation(program, "min_x"), min_x);
+  glUniform1f(glGetUniformLocation(program, "step_x"), step_x);
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo);
   glBeginTransformFeedback(GL_POINTS);
   glDrawArraysInstanced(GL_POINTS, 0, 1, num_points);
@@ -437,8 +444,13 @@ data_desc data_for_expr(std::string_view expr, std::size_t num_points)
 }
 
 data_desc parametric_data_for_exprs(std::string_view x_expr, std::string_view y_expr,
-                                    std::size_t num_points)
+                                    std::size_t num_points, range_setting trange)
 {
+  auto min_t = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
+                          trange.lower_bound.value_or(-10.0f));
+  auto max_t = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
+                          trange.upper_bound.value_or(10.0f));
+  const auto step_t = (max_t - min_t) / (num_points - 1);
   auto vao = make_vao();
   auto program = program_for_parametric_data_2d(x_expr, y_expr);
   auto vbo = make_vbo();
@@ -446,8 +458,8 @@ data_desc parametric_data_for_exprs(std::string_view x_expr, std::string_view y_
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, 3 * num_points * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
   glUseProgram(program);
-  auto loc = glGetUniformLocation(program, "scale");
-  glUniform1f(loc, 1.0f);
+  glUniform1f(glGetUniformLocation(program, "min_t"), min_t);
+  glUniform1f(glGetUniformLocation(program, "step_t"), step_t);
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo);
   glBeginTransformFeedback(GL_POINTS);
   glDrawArraysInstanced(GL_POINTS, 0, 1, num_points);
@@ -473,15 +485,17 @@ data_desc data_for_span(std::span<const glm::vec3> data)
   return {std::move(vbo), static_cast<std::uint32_t>(data.size())};
 }
 
-data_desc data_from_source(const data_source_2d &src)
+data_desc data_for_chart_2d(const data_source_2d &src, const plot_command_2d &plot)
 {
   assert(settings::samples().x > 0);
   return std::visit(
-      overload([](const std::string &expr) { return data_for_expr(expr, settings::samples().x); },
+      overload([&](const std::string &expr)
+               { return data_for_expr(expr, settings::samples().x, plot.x_range); },
                [](const csv_data_2d &c) { return data_for_expressions(c.path, c.expressions); },
-               [](const parametric_data_2d &c) {
+               [&](const parametric_data_2d &c)
+               {
                  return parametric_data_for_exprs(c.x_expression, c.y_expression,
-                                                  settings::samples().x);
+                                                  settings::samples().x, plot.t_range);
                }),
       src);
 }
@@ -597,24 +611,23 @@ data_desc data_for_parametric_3d(std::string_view x_expr, std::string_view y_exp
   return data_desc(std::move(vbo), num_points, isosamples.x + isosamples.y);
 }
 
-data_desc data_from_source(const data_source_3d &src, const range_setting &x_range,
-                           const range_setting &y_range)
+data_desc data_for_chart_3d(const data_source_3d &src, const plot_command_3d &plot)
 {
-  return std::visit(overload(
-                        [&](const std::string &expr)
-                        {
-                          return data_3d_for_expression(expr, settings::isosamples(),
-                                                        settings::samples(), x_range, y_range);
-                        },
-                        [](const csv_data_3d &c)
-                        { return data_for_expressions(c.path, c.expressions); },
-                        [&](const parametric_data_3d &d)
-                        {
-                          return data_for_parametric_3d(d.x_expression, d.y_expression,
-                                                        d.z_expression, settings::isosamples(),
-                                                        settings::samples(), x_range, y_range);
-                        }),
-                    src);
+  return std::visit(
+      overload(
+          [&](const std::string &expr)
+          {
+            return data_3d_for_expression(expr, settings::isosamples(), settings::samples(),
+                                          plot.x_range, plot.y_range);
+          },
+          [](const csv_data_3d &c) { return data_for_expressions(c.path, c.expressions); },
+          [&](const parametric_data_3d &d)
+          {
+            return data_for_parametric_3d(d.x_expression, d.y_expression, d.z_expression,
+                                          settings::isosamples(), settings::samples(), plot.u_range,
+                                          plot.v_range);
+          }),
+      src);
 }
 
 data_desc::data_desc(vbo_handle vbo, std::uint32_t num_points, std::uint32_t num_segments)
