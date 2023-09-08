@@ -5,6 +5,7 @@
 #include <vector>
 #include <array>
 #include "range_setting.hpp"
+#include "box.hpp"
 
 namespace explot
 {
@@ -12,16 +13,62 @@ struct quit_command final
 {
 };
 
+struct literal_expr final
+{
+  float value;
+};
+
+struct data_ref
+{
+  int idx;
+};
+
+using expr = std::variant<literal_expr, box<struct unary_op>, box<struct binary_op>,
+                          box<struct var_or_call>, data_ref>;
+
+enum class unary_operator
+{
+  minus,
+  plus
+};
+
+struct unary_op final
+{
+  unary_operator op;
+  expr operand;
+};
+
+enum class binary_operator
+{
+  plus,
+  minus,
+  mult,
+  div
+};
+
+struct binary_op final
+{
+  expr lhs;
+  binary_operator op;
+  expr rhs;
+};
+
+struct var_or_call final
+{
+  std::string name;
+  std::optional<std::vector<expr>> params;
+};
+
 struct csv_data_2d final
 {
   std::string path;
-  std::array<std::string, 2> expressions;
+  std::array<expr, 2> expressions;
 };
 
 struct parametric_data_2d final
 {
-  std::string x_expression;
-  std::string y_expression;
+  expr x_expression;
+  expr y_expression;
 };
 
 enum struct mark_type
@@ -30,7 +77,7 @@ enum struct mark_type
   lines
 };
 
-using data_source_2d = std::variant<std::string, csv_data_2d, parametric_data_2d>;
+using data_source_2d = std::variant<expr, csv_data_2d, parametric_data_2d>;
 
 struct graph_desc_2d final
 {
@@ -49,17 +96,17 @@ struct plot_command_2d final
 struct csv_data_3d
 {
   std::string path;
-  std::array<std::string, 3> expressions;
+  std::array<expr, 3> expressions;
 };
 
 struct parametric_data_3d final
 {
-  std::string x_expression;
-  std::string y_expression;
-  std::string z_expression;
+  expr x_expression;
+  expr y_expression;
+  expr z_expression;
 };
 
-using data_source_3d = std::variant<std::string, csv_data_3d, parametric_data_3d>;
+using data_source_3d = std::variant<expr, csv_data_3d, parametric_data_3d>;
 
 struct graph_desc_3d final
 {

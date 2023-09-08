@@ -1,14 +1,14 @@
 #include "data.hpp"
 #include "gl-handle.hpp"
-#include <fmt/format.h>
+#include <fmt/ranges.h>
 #include "csv.hpp"
-#include <ctre.hpp>
 #include <charconv>
 #include <array>
 #include "settings.hpp"
 #include "overload.hpp"
 #include "range_setting.hpp"
 #include <algorithm>
+#include <ranges>
 #include <string_view>
 
 using namespace std::literals;
@@ -16,7 +16,66 @@ using namespace std::literals;
 namespace
 {
 using namespace explot;
-program_handle program_for_functional_data(std::string_view expr)
+
+std::string to_glsl(const expr &e, std::span<const int> indices = {})
+{
+  namespace views = std::ranges::views;
+  struct visitor
+  {
+    std::span<const int> indices;
+    std::string operator()(const literal_expr &l) const { return std::to_string(l.value); }
+    std::string operator()(const box<var_or_call> &vc) const
+    {
+      if (!vc->params)
+      {
+        return vc->name;
+      }
+      else
+      {
+        const auto &ps = vc->params.value();
+        return fmt::format(
+            "{}({})", vc->name,
+            fmt::join(views::transform(ps, [this](const expr &p) { return std::visit(*this, p); }),
+                      ", "));
+      }
+    }
+    std::string operator()(data_ref d) const
+    {
+      if (d.idx == 0)
+      {
+        return "gl_VertexID";
+      }
+      auto idx = std::distance(std::begin(indices), std::ranges::find(indices, d.idx));
+      return fmt::format("row[{}]", idx);
+    }
+    std::string operator()(const box<unary_op> &op) const
+    {
+      auto o = op->op == unary_operator::minus ? '-' : '+';
+      return fmt::format("{}({})", o, std::visit(*this, op->operand));
+    }
+    std::string operator()(const box<binary_op> &op) const
+    {
+      auto o = [&]()
+      {
+        switch (op->op)
+        {
+        case binary_operator::plus:
+          return '+';
+        case binary_operator::minus:
+          return '-';
+        case binary_operator::mult:
+          return '*';
+        case binary_operator::div:
+          return '/';
+        }
+      }();
+      return fmt::format("({}) {} ({})", std::visit(*this, op->lhs), o, std::visit(*this, op->rhs));
+    }
+  };
+  return std::visit(visitor{indices}, e);
+}
+
+program_handle program_for_functional_data(const expr &e)
 {
   static constexpr auto shader_source_fmt = R"(#version 330 core
 
@@ -32,8 +91,8 @@ void  main()
   v = vec3(x, value, 0.0);
 }}
 )";
-
-  auto shader_source = fmt::format(shader_source_fmt, expr);
+  auto glsl = to_glsl(e);
+  auto shader_source = fmt::format(shader_source_fmt, glsl);
   auto shader = glCreateShader(GL_VERTEX_SHADER);
   auto shader_src_ptr = shader_source.c_str();
   glShaderSource(shader, 1, &shader_src_ptr, nullptr);
@@ -47,7 +106,7 @@ void  main()
   return program;
 }
 
-program_handle program_for_parametric_data_2d(std::string_view x_expr, std::string_view y_expr)
+program_handle program_for_parametric_data_2d(const expr &x_expr, const expr &y_expr)
 {
   static constexpr auto shader_source_fmt = R"(#version 330 core
 
@@ -64,8 +123,9 @@ void  main()
   v = vec3(x_value, y_value, 0.0);
 }}
 )";
-
-  auto shader_source = fmt::format(shader_source_fmt, x_expr, y_expr);
+  auto x_glsl = to_glsl(x_expr);
+  auto y_glsl = to_glsl(y_expr);
+  auto shader_source = fmt::format(shader_source_fmt, x_glsl, y_glsl);
   auto shader = glCreateShader(GL_VERTEX_SHADER);
   auto shader_src_ptr = shader_source.c_str();
   glShaderSource(shader, 1, &shader_src_ptr, nullptr);
@@ -79,7 +139,7 @@ void  main()
   return program;
 }
 
-program_handle program_for_functional_data_3d_x(std::string_view expr)
+program_handle program_for_functional_data_3d_x(const expr &e)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
 
@@ -99,8 +159,8 @@ void  main()
   v = vec3(x, y, value);
 }}
 )shader";
-
-  const auto shader_source = fmt::format(shader_source_fmt, expr);
+  auto glsl = to_glsl(e);
+  const auto shader_source = fmt::format(shader_source_fmt, glsl);
   auto shader = glCreateShader(GL_VERTEX_SHADER);
   auto shader_src_ptr = shader_source.c_str();
   glShaderSource(shader, 1, &shader_src_ptr, nullptr);
@@ -114,7 +174,7 @@ void  main()
   return program;
 }
 
-program_handle program_for_functional_data_3d_y(std::string_view expr)
+program_handle program_for_functional_data_3d_y(const expr &e)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
 
@@ -134,8 +194,8 @@ void  main()
   v = vec3(x, y, value);
 }}
 )shader";
-
-  const auto shader_source = fmt::format(shader_source_fmt, expr);
+  const auto glsl = to_glsl(e);
+  const auto shader_source = fmt::format(shader_source_fmt, glsl);
   auto shader = glCreateShader(GL_VERTEX_SHADER);
   auto shader_src_ptr = shader_source.c_str();
   glShaderSource(shader, 1, &shader_src_ptr, nullptr);
@@ -149,8 +209,8 @@ void  main()
   return program;
 }
 
-program_handle program_for_parametric_data_3d_u(std::string_view x_expr, std::string_view y_expr,
-                                                std::string_view z_expr)
+program_handle program_for_parametric_data_3d_u(const expr &x_expr, const expr &y_expr,
+                                                const expr &z_expr)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
 
@@ -172,8 +232,10 @@ void  main()
   p = vec3(x, y, z);
 }}
 )shader";
-
-  const auto shader_source = fmt::format(shader_source_fmt, x_expr, y_expr, z_expr);
+  const auto x_glsl = to_glsl(x_expr);
+  const auto y_glsl = to_glsl(y_expr);
+  const auto z_glsl = to_glsl(z_expr);
+  const auto shader_source = fmt::format(shader_source_fmt, x_glsl, y_glsl, z_glsl);
   auto shader = glCreateShader(GL_VERTEX_SHADER);
   auto shader_src_ptr = shader_source.c_str();
   glShaderSource(shader, 1, &shader_src_ptr, nullptr);
@@ -187,8 +249,8 @@ void  main()
   return program;
 }
 
-program_handle program_for_parametric_data_3d_v(std::string_view x_expr, std::string_view y_expr,
-                                                std::string_view z_expr)
+program_handle program_for_parametric_data_3d_v(const expr &x_expr, const expr &y_expr,
+                                                const expr &z_expr)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
 
@@ -210,8 +272,10 @@ void  main()
   p = vec3(x, y, z);
 }}
 )shader";
-
-  const auto shader_source = fmt::format(shader_source_fmt, x_expr, y_expr, z_expr);
+  const auto x_glsl = to_glsl(x_expr);
+  const auto y_glsl = to_glsl(y_expr);
+  const auto z_glsl = to_glsl(z_expr);
+  const auto shader_source = fmt::format(shader_source_fmt, x_glsl, y_glsl, z_glsl);
   auto shader = glCreateShader(GL_VERTEX_SHADER);
   auto shader_src_ptr = shader_source.c_str();
   glShaderSource(shader, 1, &shader_src_ptr, nullptr);
@@ -225,68 +289,47 @@ void  main()
   return program;
 }
 
-static constexpr char index_regex[] = "\\$(\\d+)";
-std::vector<int> extract_indices(std::string_view expression)
+void extract_indices(const expr &e, std::vector<int> &indices)
 {
-  auto result = std::vector<int>();
-  while (!expression.empty())
+  struct visitor
   {
-    if (auto [whole, index_str] = ctre::search<index_regex>(expression); whole)
+    std::vector<int> *indices;
+    void operator()(const literal_expr &) {}
+    void operator()(const box<var_or_call> &vc)
     {
-      auto index = 0;
-      auto [ptr, errc] = std::from_chars(index_str.begin(), index_str.end(), index);
-      result.push_back(index);
-      expression = expression.substr(whole.size());
+      if (vc->params.has_value())
+      {
+        for (const auto &e : vc->params.value())
+        {
+          std::visit(*this, e);
+        }
+      }
     }
-    else
+    void operator()(const box<unary_op> &u) { std::visit(*this, u->operand); }
+    void operator()(const box<binary_op> &b)
     {
-      break;
+      std::visit(*this, b->lhs);
+      std::visit(*this, b->rhs);
     }
-  }
-  return result;
+    void operator()(data_ref d) { indices->push_back(d.idx); }
+  };
+  std::visit(visitor{&indices}, e);
 }
 
-std::vector<int> extract_indices(std::span<const std::string> expressions)
+std::vector<int> extract_indices(std::span<const expr> expressions)
 {
-  auto result = std::vector<int>();
-  for (const auto &expression : expressions)
+  std::vector<int> indices;
+  for (const auto &e : expressions)
   {
-    auto indices = extract_indices(expression);
-    result.insert(result.end(), indices.begin(), indices.end());
+    extract_indices(e, indices);
   }
-  std::sort(result.begin(), result.end());
-  result.erase(std::unique(result.begin(), result.end()), result.end());
-  if (!result.empty() && result.front() == 0)
+  std::ranges::sort(indices);
+  indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+  if (indices.size() > 0 && indices[0] == 0)
   {
-    result.erase(result.begin());
+    indices.erase(indices.begin());
   }
-  return result;
-}
-
-std::string replace_indices(std::string expression, const std::span<const int> indices)
-{
-  using namespace std::string_view_literals;
-  for (auto row_index = 0u; row_index < indices.size(); ++row_index)
-  {
-    auto index = indices[row_index];
-    auto what = fmt::format("${}", index);
-    auto with = fmt::format("(row[{}])", row_index);
-    auto pos = expression.find(what);
-    while (pos != expression.npos)
-    {
-      expression.replace(pos, what.length(), with);
-      pos = expression.find(what, pos + with.length());
-    }
-  }
-  auto what = "$0"sv;
-  auto with = "(gl_VertexID)"sv;
-  auto pos = expression.find(what);
-  while (pos != expression.npos)
-  {
-    expression.replace(pos, what.length(), with);
-    pos = expression.find(what, pos + with.length());
-  }
-  return expression;
+  return indices;
 }
 
 static constexpr const char *shader_for_2_expressions = R"shader(#version 330 core
@@ -303,11 +346,11 @@ void  main()
 }}
 )shader";
 
-program_handle program_for_expressions(const std::array<std::string, 2> &expressions,
+program_handle program_for_expressions(const std::array<expr, 2> &expressions,
                                        std::span<const int> indices)
 {
-  auto x_expression = replace_indices(expressions[0], indices);
-  auto y_expression = replace_indices(expressions[1], indices);
+  auto x_expression = to_glsl(expressions[0], indices);
+  auto y_expression = to_glsl(expressions[1], indices);
   auto shader_str =
       fmt::format(shader_for_2_expressions, indices.size(), x_expression, y_expression);
   auto shader_src = shader_str.c_str();
@@ -338,12 +381,12 @@ void  main()
 }}
 )shader";
 
-program_handle program_for_expressions(const std::array<std::string, 3> &expressions,
+program_handle program_for_expressions(const std::array<expr, 3> &expressions,
                                        std::span<const int> indices)
 {
-  auto x_expression = replace_indices(expressions[0], indices);
-  auto y_expression = replace_indices(expressions[1], indices);
-  auto z_expression = replace_indices(expressions[2], indices);
+  auto x_expression = to_glsl(expressions[0], indices);
+  auto y_expression = to_glsl(expressions[1], indices);
+  auto z_expression = to_glsl(expressions[2], indices);
   auto shader_str = fmt::format(shader_for_3_expressions, indices.size(), x_expression,
                                 y_expression, z_expression);
   auto shader_src = shader_str.c_str();
@@ -372,8 +415,7 @@ void setup_vao(GLuint vao, GLuint vbo, std::size_t num_indices)
   }
 }
 template <std::size_t N>
-data_desc data_for_expressions_helper(std::string_view path,
-                                      const std::array<std::string, N> &expressions)
+data_desc data_for_expressions_helper(std::string_view path, const std::array<expr, N> &expressions)
 {
   auto vao = make_vao();
   auto indices = extract_indices(expressions);
@@ -408,17 +450,17 @@ data_desc data_for_expressions_helper(std::string_view path,
 
 namespace explot
 {
-data_desc data_for_expressions(std::string_view path, const std::array<std::string, 2> &expressions)
+data_desc data_for_expressions(std::string_view path, const std::array<expr, 2> &expressions)
 {
   return data_for_expressions_helper(path, expressions);
 }
 
-data_desc data_for_expressions(std::string_view path, const std::array<std::string, 3> &expressions)
+data_desc data_for_expressions(std::string_view path, const std::array<expr, 3> &expressions)
 {
   return data_for_expressions_helper(path, expressions);
 }
 
-data_desc data_for_expr(std::string_view expr, std::size_t num_points, range_setting xrange)
+data_desc data_for_expr(const expr &expr, std::size_t num_points, range_setting xrange)
 {
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           xrange.lower_bound.value_or(-10.0f));
@@ -443,8 +485,8 @@ data_desc data_for_expr(std::string_view expr, std::size_t num_points, range_set
   return data_desc(std::move(vbo), num_points);
 }
 
-data_desc parametric_data_for_exprs(std::string_view x_expr, std::string_view y_expr,
-                                    std::size_t num_points, range_setting trange)
+data_desc parametric_data_for_exprs(const expr &x_expr, const expr &y_expr, std::size_t num_points,
+                                    range_setting trange)
 {
   auto min_t = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           trange.lower_bound.value_or(-10.0f));
@@ -489,7 +531,7 @@ data_desc data_for_chart_2d(const data_source_2d &src, const plot_command_2d &pl
 {
   assert(settings::samples().x > 0);
   return std::visit(
-      overload([&](const std::string &expr)
+      overload([&](const expr &expr)
                { return data_for_expr(expr, settings::samples().x, plot.x_range); },
                [](const csv_data_2d &c) { return data_for_expressions(c.path, c.expressions); },
                [&](const parametric_data_2d &c)
@@ -500,7 +542,7 @@ data_desc data_for_chart_2d(const data_source_2d &src, const plot_command_2d &pl
       src);
 }
 
-data_desc data_3d_for_expression(std::string_view expr, settings::samples_setting isosamples,
+data_desc data_3d_for_expression(const expr &expr, settings::samples_setting isosamples,
                                  settings::samples_setting samples, range_setting xrange,
                                  range_setting yrange)
 {
@@ -557,8 +599,8 @@ data_desc data_3d_for_expression(std::string_view expr, settings::samples_settin
   return data_desc(std::move(vbo), num_points, isosamples.x + isosamples.y);
 }
 
-data_desc data_for_parametric_3d(std::string_view x_expr, std::string_view y_expr,
-                                 std::string_view z_expr, settings::samples_setting isosamples,
+data_desc data_for_parametric_3d(const expr &x_expr, const expr &y_expr, const expr &z_expr,
+                                 settings::samples_setting isosamples,
                                  settings::samples_setting samples, range_setting u_range,
                                  range_setting v_range)
 {
@@ -615,7 +657,7 @@ data_desc data_for_chart_3d(const data_source_3d &src, const plot_command_3d &pl
 {
   return std::visit(
       overload(
-          [&](const std::string &expr)
+          [&](const expr &expr)
           {
             return data_3d_for_expression(expr, settings::isosamples(), settings::samples(),
                                           plot.x_range, plot.y_range);
