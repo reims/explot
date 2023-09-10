@@ -5,8 +5,8 @@
 #include <memory>
 #include <optional>
 #include <ctre.hpp>
-#include "range_setting.hpp"
 #include "overload.hpp"
+#include "parse_commands.hpp"
 
 namespace
 {
@@ -110,10 +110,10 @@ std::string to_string_<range_setting>(const range_setting &range)
 template <>
 bool set_<range_setting>(range_setting &range, std::string_view str)
 {
-  auto match = match_range(str);
+  auto match = parse_range_setting(str);
   if (match)
   {
-    range = match.value().setting;
+    range = match.value();
     return true;
   }
   else

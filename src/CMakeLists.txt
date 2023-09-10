@@ -21,6 +21,7 @@ add_executable(explot
   graph3d.cpp
   plot3d.cpp
   coordinate_system_3d.cpp
+  program.cpp
   ../msdfgen/ext/import-font.cpp
 )
 

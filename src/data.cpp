@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <ranges>
 #include <string_view>
+#include "program.hpp"
 
 using namespace std::literals;
 
@@ -93,17 +94,7 @@ void  main()
 )";
   auto glsl = to_glsl(e);
   auto shader_source = fmt::format(shader_source_fmt, glsl);
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  auto shader_src_ptr = shader_source.c_str();
-  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr const char *varying = "v";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_source.c_str(), "v");
 }
 
 program_handle program_for_parametric_data_2d(const expr &x_expr, const expr &y_expr)
@@ -126,17 +117,7 @@ void  main()
   auto x_glsl = to_glsl(x_expr);
   auto y_glsl = to_glsl(y_expr);
   auto shader_source = fmt::format(shader_source_fmt, x_glsl, y_glsl);
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  auto shader_src_ptr = shader_source.c_str();
-  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr const char *varying = "v";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_source.c_str(), "v");
 }
 
 program_handle program_for_functional_data_3d_x(const expr &e)
@@ -161,17 +142,7 @@ void  main()
 )shader";
   auto glsl = to_glsl(e);
   const auto shader_source = fmt::format(shader_source_fmt, glsl);
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  auto shader_src_ptr = shader_source.c_str();
-  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr const char *varying = "v";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_source.c_str(), "v");
 }
 
 program_handle program_for_functional_data_3d_y(const expr &e)
@@ -196,17 +167,7 @@ void  main()
 )shader";
   const auto glsl = to_glsl(e);
   const auto shader_source = fmt::format(shader_source_fmt, glsl);
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  auto shader_src_ptr = shader_source.c_str();
-  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr const char *varying = "v";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_source.c_str(), "v");
 }
 
 program_handle program_for_parametric_data_3d_u(const expr &x_expr, const expr &y_expr,
@@ -236,17 +197,7 @@ void  main()
   const auto y_glsl = to_glsl(y_expr);
   const auto z_glsl = to_glsl(z_expr);
   const auto shader_source = fmt::format(shader_source_fmt, x_glsl, y_glsl, z_glsl);
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  auto shader_src_ptr = shader_source.c_str();
-  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr const char *varying = "p";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_source.c_str(), "p");
 }
 
 program_handle program_for_parametric_data_3d_v(const expr &x_expr, const expr &y_expr,
@@ -276,17 +227,7 @@ void  main()
   const auto y_glsl = to_glsl(y_expr);
   const auto z_glsl = to_glsl(z_expr);
   const auto shader_source = fmt::format(shader_source_fmt, x_glsl, y_glsl, z_glsl);
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  auto shader_src_ptr = shader_source.c_str();
-  glShaderSource(shader, 1, &shader_src_ptr, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr const char *varying = "p";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_source.c_str(), "p");
 }
 
 void extract_indices(const expr &e, std::vector<int> &indices)
@@ -354,16 +295,7 @@ program_handle program_for_expressions(const std::array<expr, 2> &expressions,
   auto shader_str =
       fmt::format(shader_for_2_expressions, indices.size(), x_expression, y_expression);
   auto shader_src = shader_str.c_str();
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(shader, 1, &shader_src, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr auto *varying = "v";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_str.c_str(), "v");
 }
 
 static constexpr const char *shader_for_3_expressions = R"shader(#version 330 core
@@ -389,17 +321,7 @@ program_handle program_for_expressions(const std::array<expr, 3> &expressions,
   auto z_expression = to_glsl(expressions[2], indices);
   auto shader_str = fmt::format(shader_for_3_expressions, indices.size(), x_expression,
                                 y_expression, z_expression);
-  auto shader_src = shader_str.c_str();
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(shader, 1, &shader_src, nullptr);
-  glCompileShader(shader);
-  auto program = make_program();
-  glAttachShader(program, shader);
-  static constexpr auto *varying = "v";
-  glTransformFeedbackVaryings(program, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(program);
-  glDeleteShader(shader);
-  return program;
+  return make_program_with_varying(shader_str.c_str(), "v");
 }
 
 void setup_vao(GLuint vao, GLuint vbo, std::size_t num_indices)
@@ -546,7 +468,6 @@ data_desc data_3d_for_expression(const expr &expr, settings::samples_setting iso
                                  settings::samples_setting samples, range_setting xrange,
                                  range_setting yrange)
 {
-  fmt::print("starting data_3d_for_expression\n");
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           xrange.lower_bound.value_or(-10.0f));
   auto max_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
@@ -568,8 +489,6 @@ data_desc data_3d_for_expression(const expr &expr, settings::samples_setting iso
   const auto num_points_x = isosamples.y * samples.x;
   const auto num_points_y = isosamples.x * samples.y;
   const auto num_points = num_points_x + num_points_y;
-  fmt::print("[{}:{}] [{}:{}] is: ({},{}) s: ({},{})\n", min_x, max_x, min_y, max_y, isosamples.x,
-             isosamples.y, samples.x, samples.y);
   auto vao = make_vao();
   auto vbo = make_vbo();
   glBindVertexArray(vao);
@@ -595,7 +514,6 @@ data_desc data_3d_for_expression(const expr &expr, settings::samples_setting iso
   glBeginTransformFeedback(GL_POINTS);
   glDrawArrays(GL_POINTS, 0, num_points_y);
   glEndTransformFeedback();
-  fmt::print("finished data_3d_for_expression\n");
   return data_desc(std::move(vbo), num_points, isosamples.x + isosamples.y);
 }
 

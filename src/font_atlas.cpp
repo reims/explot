@@ -9,6 +9,7 @@
 #include <cassert>
 #include <algorithm>
 #include <fontconfig/fontconfig.h>
+#include "program.hpp"
 
 namespace
 {
@@ -56,17 +57,7 @@ void main()
 
 auto make_string_program()
 {
-  auto program = explot::make_program();
-  auto vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertex_shader, 1, &string_vertex_shader_src, nullptr);
-  glCompileShader(vertex_shader);
-  auto fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment_shader, 1, &fragment_shader_src, nullptr);
-  glCompileShader(fragment_shader);
-  glAttachShader(program, vertex_shader);
-  glAttachShader(program, fragment_shader);
-  glLinkProgram(program);
-  return program;
+  return explot::make_program(nullptr, string_vertex_shader_src, fragment_shader_src);
 }
 
 static constexpr auto num_points = 6;

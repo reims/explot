@@ -4,6 +4,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <fmt/format.h>
 #include "colors.hpp"
+#include "program.hpp"
 
 namespace
 {
@@ -95,24 +96,8 @@ void main()
 
 auto program_for_ticks()
 {
-  auto program = explot::make_program();
-  auto vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertex_shader, 1, &ticks_vertex_shader_src, nullptr);
-  glCompileShader(vertex_shader);
-  auto geometry_shader = glCreateShader(GL_GEOMETRY_SHADER);
-  glShaderSource(geometry_shader, 1, &ticks_geometry_shader_src, nullptr);
-  glCompileShader(geometry_shader);
-  auto fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment_shader, 1, &fragment_shader_src, nullptr);
-  glCompileShader(fragment_shader);
-  glAttachShader(program, vertex_shader);
-  glAttachShader(program, geometry_shader);
-  glAttachShader(program, fragment_shader);
-  glLinkProgram(program);
-  glDeleteShader(vertex_shader);
-  glDeleteShader(geometry_shader);
-  glDeleteShader(fragment_shader);
-  return program;
+  return explot::make_program(ticks_geometry_shader_src, ticks_vertex_shader_src,
+                              fragment_shader_src);
 }
 
 } // namespace

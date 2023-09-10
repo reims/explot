@@ -6,9 +6,12 @@
 #include <fmt/format.h>
 #include <memory>
 #include <numbers>
+#include "program.hpp"
 
 namespace
 {
+using namespace explot;
+
 constexpr auto vertex_shader_src_2d = R"shader(#version 330 core
 layout (location = 0) in vec3 position;
 
@@ -223,23 +226,7 @@ auto shape_for_lines(int segments)
 
 auto program_for_lines_2d()
 {
-  auto vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertex_shader, 1, &vertex_shader_src_2d, nullptr);
-  glCompileShader(vertex_shader);
-  auto geometry_shader = glCreateShader(GL_GEOMETRY_SHADER);
-  glShaderSource(geometry_shader, 1, &lines_geometry_shader_src, nullptr);
-  glCompileShader(geometry_shader);
-  auto fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment_shader, 1, &fragment_shader_src, nullptr);
-  glCompileShader(fragment_shader);
-  auto program = explot::make_program();
-  glAttachShader(program, vertex_shader);
-  glAttachShader(program, geometry_shader);
-  glAttachShader(program, fragment_shader);
-  glLinkProgram(program);
-  glDeleteShader(vertex_shader);
-  glDeleteShader(geometry_shader);
-  glDeleteShader(fragment_shader);
+  auto program = make_program(lines_geometry_shader_src, vertex_shader_src_2d, fragment_shader_src);
   auto s = shape_for_lines(3);
   glUseProgram(program);
   glUniform2fv(glGetUniformLocation(program, "shape"), 8, s.get());
@@ -248,23 +235,7 @@ auto program_for_lines_2d()
 
 auto program_for_lines_3d()
 {
-  auto vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertex_shader, 1, &vertex_shader_src_3d, nullptr);
-  glCompileShader(vertex_shader);
-  auto geometry_shader = glCreateShader(GL_GEOMETRY_SHADER);
-  glShaderSource(geometry_shader, 1, &lines_geometry_shader_src, nullptr);
-  glCompileShader(geometry_shader);
-  auto fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment_shader, 1, &fragment_shader_src, nullptr);
-  glCompileShader(fragment_shader);
-  auto program = explot::make_program();
-  glAttachShader(program, vertex_shader);
-  glAttachShader(program, geometry_shader);
-  glAttachShader(program, fragment_shader);
-  glLinkProgram(program);
-  glDeleteShader(vertex_shader);
-  glDeleteShader(geometry_shader);
-  glDeleteShader(fragment_shader);
+  auto program = make_program(lines_geometry_shader_src, vertex_shader_src_3d, fragment_shader_src);
   auto s = shape_for_lines(3);
   glUseProgram(program);
   glUniform2fv(glGetUniformLocation(program, "shape"), 8, s.get());

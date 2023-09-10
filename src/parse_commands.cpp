@@ -765,4 +765,18 @@ std::optional<command> parse_command(const char *cmd)
     return std::nullopt;
   }
 }
+
+std::optional<range_setting> parse_range_setting(std::string_view s)
+{
+  auto input = lexy::string_input<lexy::utf8_char_encoding>(s);
+  auto matched = lexy::parse<r::range>(input, lexy_ext::report_error);
+  if (matched.is_success())
+  {
+    return matched.value();
+  }
+  else
+  {
+    return std::nullopt;
+  }
+}
 } // namespace explot

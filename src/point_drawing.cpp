@@ -1,5 +1,6 @@
 #include "point_drawing.hpp"
 #include <glm/gtc/type_ptr.hpp>
+#include "program.hpp"
 
 namespace
 {
@@ -112,24 +113,7 @@ void main()
 
 program_handle make_points_program(const char *vertex_shader_src)
 {
-  auto vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(vertex_shader, 1, &vertex_shader_src, nullptr);
-  glCompileShader(vertex_shader);
-  auto geometry_shader = glCreateShader(GL_GEOMETRY_SHADER);
-  glShaderSource(geometry_shader, 1, &geometry_shader_src, nullptr);
-  glCompileShader(geometry_shader);
-  auto fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment_shader, 1, &fragment_shader_src, nullptr);
-  glCompileShader(fragment_shader);
-  auto program = make_program();
-  glAttachShader(program, vertex_shader);
-  glAttachShader(program, geometry_shader);
-  glAttachShader(program, fragment_shader);
-  glLinkProgram(program);
-  glDeleteShader(vertex_shader);
-  glDeleteShader(geometry_shader);
-  glDeleteShader(fragment_shader);
-  return program;
+  return make_program(geometry_shader_src, vertex_shader_src, fragment_shader_src);
 }
 
 program_handle make_points_2d_program() { return make_points_program(vertex_2d_shader_src); }

@@ -8,6 +8,7 @@
 #include "gl-handle.hpp"
 #include <cstring>
 #include <utility>
+#include "program.hpp"
 
 namespace
 {
@@ -89,16 +90,7 @@ void step(unsigned int src_vbo, unsigned int tgt_vbo, int num_points)
 
 explot::program_handle program_for_shader(const char *shader_src)
 {
-  auto result = explot::make_program();
-  auto shader = glCreateShader(GL_VERTEX_SHADER);
-  glShaderSource(shader, 1, &shader_src, nullptr);
-  glCompileShader(shader);
-  glAttachShader(result, shader);
-  constexpr auto varying = "v";
-  glTransformFeedbackVaryings(result, 1, &varying, GL_INTERLEAVED_ATTRIBS);
-  glLinkProgram(result);
-  glDeleteShader(shader);
-  return result;
+  return explot::make_program_with_varying(shader_src, "v");
 }
 
 explot::vbo_handle prepare(const explot::data_desc &d, const char *shader_src)
