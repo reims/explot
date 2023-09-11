@@ -137,30 +137,6 @@ static constexpr auto uimain = [](auto commands)
                             return unit{};
                           });
   renderers.push_back(set_renderer);
-  auto drag_renderer =
-      drags()
-      | rx::transform(
-          [=](auto ds)
-          {
-            return rx::scope(
-                       []() { return rx::resource<drag_render_state>(make_drag_render_state()); },
-                       [=](rx::resource<drag_render_state> res)
-                       {
-                         return frames | rx::observe_on(on_run_loop)
-                                | rx::take_until(ds | rx::last())
-                                | rx::with_latest_from(
-                                    [res = std::move(res)](unit, const rect &screen, const drag &d)
-                                    {
-                                      auto screen_to_clip = transform(screen, clip_rect);
-                                      draw(const_get(res), drag_to_rect(d, screen.upper_bounds.y),
-                                           screen_to_clip, 1.0f);
-                                      return unit{};
-                                    },
-                                    screen_space, ds);
-                       })
-                   | rx::subscribe_on(on_run_loop);
-          })
-      | rx::switch_on_next();
 
   auto plot_commands = commands | rx::filter(is_plot_command)
                        | rx::transform([](const command &cmd) { return as_plot_command(cmd); });
@@ -213,6 +189,39 @@ static constexpr auto uimain = [](auto commands)
                                    return std::make_shared<coordinate_system_2d>(
                                        make_coordinate_system_2d(r, 5));
                                  });
+                         auto drag_renderer =
+                             drags()
+                             | rx::transform(
+                                 [=](auto ds)
+                                 {
+                                   return rx::scope(
+                                              []() {
+                                                return rx::resource<drag_render_state>(
+                                                    make_drag_render_state());
+                                              },
+                                              [=](rx::resource<drag_render_state> res)
+                                              {
+                                                return frames | rx::observe_on(on_run_loop)
+                                                       | rx::take_until(ds | rx::last())
+                                                       | rx::with_latest_from(
+                                                           [res = std::move(res)](
+                                                               unit, const rect &screen,
+                                                               const drag &d)
+                                                           {
+                                                             auto screen_to_clip =
+                                                                 transform(screen, clip_rect);
+                                                             draw(const_get(res),
+                                                                  drag_to_rect(
+                                                                      d, screen.upper_bounds.y),
+                                                                  screen_to_clip, 1.0f);
+                                                             return unit{};
+                                                           },
+                                                           screen_space, ds);
+                                              })
+                                          | rx::subscribe_on(on_run_loop);
+                                 })
+                             | rx::switch_on_next();
+
                          return frames | rx::observe_on(on_run_loop)
                                 | rx::with_latest_from(
                                     [res](unit, const rect &screen, const rect &view,
@@ -224,7 +233,8 @@ static constexpr auto uimain = [](auto commands)
                                       draw(*cs, view_to_screen, screen_to_clip, 1.0f, 5.0f);
                                       return unit{};
                                     },
-                                    screen_space, view_space, coordinate_systems);
+                                    screen_space, view_space, coordinate_systems)
+                                | rx::merge(drag_renderer);
                        })
                    | rx::subscribe_on(on_run_loop) | rx::as_dynamic();
           });

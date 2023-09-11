@@ -1,6 +1,7 @@
 #include "drag_renderer.hpp"
 #include "data.hpp"
 #include <glm/gtx/string_cast.hpp>
+#include "colors.hpp"
 
 namespace explot
 {
@@ -17,6 +18,6 @@ void draw(const drag_render_state &s, const rect &d, const glm::mat4 &screen_to_
   static constexpr auto view =
       rect{.lower_bounds = {0.0f, 0.0f, -1.0f}, .upper_bounds = {1.0f, 1.0f, 1.0f}};
   auto view_to_screen = transform(view, d);
-  draw(s.lines, width, view_to_screen, screen_to_clip, {1.0f, 0.0f, 0.0f, 1.0f});
+  draw(s.lines, width, view_to_screen, screen_to_clip, selection_color);
 }
 } // namespace explot
