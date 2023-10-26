@@ -136,14 +136,12 @@ void draw(const points_2d_state &state, float line_width, float point_width, con
           const glm::mat4 &view_to_screen, const glm::mat4 &screen_to_clip)
 {
   glBindVertexArray(state.vao);
-  glUseProgram(state.program);
-  glUniform1f(glGetUniformLocation(state.program, "width"), line_width / 2);
-  glUniform1f(glGetUniformLocation(state.program, "point_width"), point_width / 2);
-  glUniformMatrix4fv(glGetUniformLocation(state.program, "screen_to_clip"), 1, GL_FALSE,
-                     glm::value_ptr(screen_to_clip));
-  glUniformMatrix4fv(glGetUniformLocation(state.program, "phase_to_screen"), 1, GL_FALSE,
-                     glm::value_ptr(view_to_screen));
-  glUniform4fv(glGetUniformLocation(state.program, "color"), 1, glm::value_ptr(color));
+  uniform ufs[] = {{"width", line_width / 2},
+                   {"point_width", point_width / 2},
+                   {"screen_to_clip", screen_to_clip},
+                   {"phase_to_screen", view_to_screen},
+                   {"color", color}};
+  set_uniforms(state.program, ufs);
   glDrawArrays(GL_POINTS, 0, state.num_points);
 }
 
@@ -161,16 +159,10 @@ void draw(const points_3d_state &state, float line_width, float point_width, con
           const glm::mat4 &screen_to_clip)
 {
   glBindVertexArray(state.vao);
-  glUseProgram(state.program);
-  glUniform1f(glGetUniformLocation(state.program, "width"), line_width / 2);
-  glUniform1f(glGetUniformLocation(state.program, "point_width"), point_width / 2);
-  glUniformMatrix4fv(glGetUniformLocation(state.program, "screen_to_clip"), 1, GL_FALSE,
-                     glm::value_ptr(screen_to_clip));
-  glUniformMatrix4fv(glGetUniformLocation(state.program, "phase_to_clip"), 1, GL_FALSE,
-                     glm::value_ptr(phase_to_clip));
-  glUniformMatrix4fv(glGetUniformLocation(state.program, "clip_to_screen"), 1, GL_FALSE,
-                     glm::value_ptr(clip_to_screen));
-  glUniform4fv(glGetUniformLocation(state.program, "color"), 1, glm::value_ptr(color));
+  uniform ufs[] = {{"width", line_width / 2},          {"point_width", point_width / 2},
+                   {"screen_to_clip", screen_to_clip}, {"phase_to_clip", phase_to_clip},
+                   {"clip_to_screen", clip_to_screen}, {"color", color}};
+  set_uniforms(state.program, ufs);
   glDrawArrays(GL_POINTS, 0, state.num_points);
 }
 

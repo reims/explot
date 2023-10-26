@@ -7,7 +7,7 @@ namespace explot
 {
 using gl_id = GLuint;
 
-template <void (*delete_handle)(unsigned int)>
+template <void (*delete_handle)(gl_id)>
 class gl_handle final
 {
   gl_id id = 0;
@@ -23,10 +23,7 @@ public:
 
   gl_handle &operator=(gl_handle &&other) noexcept
   {
-    if (this->id != 0)
-    {
-      delete_handle(this->id);
-    }
+    delete_handle(this->id);
     this->id = other.id;
     other.id = 0;
     return *this;
@@ -34,20 +31,11 @@ public:
 
   void reset(gl_id id = 0) noexcept
   {
-    if (this->id != 0)
-    {
-      delete_handle(this->id);
-    }
+    delete_handle(this->id);
     this->id = id;
   }
 
-  ~gl_handle() noexcept
-  {
-    if (this->id != 0)
-    {
-      delete_handle(this->id);
-    }
-  }
+  ~gl_handle() noexcept { delete_handle(this->id); }
 
   operator gl_id() const noexcept
   {
@@ -58,21 +46,21 @@ public:
 
 namespace detail
 {
-inline void delete_vao(unsigned int id) { glDeleteVertexArrays(1, &id); }
+inline void delete_vao(gl_id id) { glDeleteVertexArrays(1, &id); }
 
-inline void delete_vbo(unsigned int id) { glDeleteBuffers(1, &id); }
+inline void delete_vbo(gl_id id) { glDeleteBuffers(1, &id); }
 
-inline void delete_program(unsigned int id) { glDeleteProgram(id); }
+inline void delete_program(gl_id id) { glDeleteProgram(id); }
 
-inline void delete_texture(unsigned int id) { glDeleteTextures(1, &id); }
+inline void delete_texture(gl_id id) { glDeleteTextures(1, &id); }
 
-inline void delete_fbo(unsigned int id) { glDeleteFramebuffers(1, &id); }
+inline void delete_fbo(gl_id id) { glDeleteFramebuffers(1, &id); }
 } // namespace detail
 
 using vao_handle = gl_handle<detail::delete_vao>;
 inline vao_handle make_vao()
 {
-  unsigned int id;
+  gl_id id;
   glGenVertexArrays(1, &id);
   return vao_handle(id);
 }
@@ -80,7 +68,7 @@ inline vao_handle make_vao()
 using vbo_handle = gl_handle<detail::delete_vbo>;
 inline vbo_handle make_vbo()
 {
-  unsigned int id;
+  gl_id id;
   glGenBuffers(1, &id);
   return vbo_handle(id);
 }
@@ -91,7 +79,7 @@ inline program_handle make_program() { return program_handle(glCreateProgram());
 using texture_handle = gl_handle<detail::delete_texture>;
 inline texture_handle make_texture()
 {
-  unsigned int id;
+  gl_id id;
   glGenTextures(1, &id);
   return texture_handle(id);
 }
@@ -99,7 +87,7 @@ inline texture_handle make_texture()
 using fbo_handle = gl_handle<detail::delete_fbo>;
 inline fbo_handle make_fbo()
 {
-  unsigned int id;
+  gl_id id;
   glGenFramebuffers(1, &id);
   return fbo_handle(id);
 }

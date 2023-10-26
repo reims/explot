@@ -132,27 +132,24 @@ void draw(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen,
           const glm::mat4 &screen_to_clip, float width, float tick_size)
 {
   glBindVertexArray(cs.vao_for_ticks);
-  glUseProgram(cs.program_for_ticks);
-  glUniformMatrix4fv(glGetUniformLocation(cs.program_for_ticks, "phase_to_screen"), 1, GL_FALSE,
-                     glm::value_ptr(view_to_screen));
-  glUniformMatrix4fv(glGetUniformLocation(cs.program_for_ticks, "screen_to_clip"), 1, GL_FALSE,
-                     glm::value_ptr(screen_to_clip));
-  glUniform4fv(glGetUniformLocation(cs.program_for_ticks, "color"), 1, glm::value_ptr(axis_color));
-  glUniform1f(glGetUniformLocation(cs.program_for_ticks, "tick_size"), 20.0f);
-  glUniform1f(glGetUniformLocation(cs.program_for_ticks, "width"), 2.0f);
-  glUniform2f(glGetUniformLocation(cs.program_for_ticks, "start"), cs.bounding_rect.lower_bounds.x,
-              cs.bounding_rect.lower_bounds.y);
-  glUniform2f(glGetUniformLocation(cs.program_for_ticks, "axis_dir"), 1.0f, 0.0f);
-  glUniform2f(glGetUniformLocation(cs.program_for_ticks, "tick_dir"), 0.0f, 1.0f);
-  glUniform1f(glGetUniformLocation(cs.program_for_ticks, "step"),
-              (cs.bounding_rect.upper_bounds.x - cs.bounding_rect.lower_bounds.x)
-                  / static_cast<float>(cs.num_ticks - 1));
+  uniform common_ufs[] = {{"phase_to_screen", view_to_screen},
+                          {"screen_to_clip", screen_to_clip},
+                          {"color", axis_color},
+                          {"tick_size", 20.0f},
+                          {"width", 2.0f},
+                          {"start", glm::vec2(cs.bounding_rect.lower_bounds)}};
+  uniform x_ufs[] = {{"axis_dir", glm::vec2(1.0f, 0.0f)},
+                     {"tick_dir", glm::vec2(0.0f, 1.0f)},
+                     {"step", (cs.bounding_rect.upper_bounds.x - cs.bounding_rect.lower_bounds.x)
+                                  / static_cast<float>(cs.num_ticks - 1)}};
+  uniform y_ufs[] = {{"axis_dir", glm::vec2(0.0f, 1.0f)},
+                     {"tick_dir", glm::vec2(1.0f, 0.0f)},
+                     {"step", (cs.bounding_rect.upper_bounds.y - cs.bounding_rect.lower_bounds.y)
+                                  / static_cast<float>(cs.num_ticks - 1)}};
+  set_uniforms(cs.program_for_ticks, common_ufs);
+  set_uniforms(cs.program_for_ticks, x_ufs);
   glDrawArrays(GL_POINTS, 0, cs.num_ticks);
-  glUniform2f(glGetUniformLocation(cs.program_for_ticks, "axis_dir"), 0.0f, 1.0f);
-  glUniform2f(glGetUniformLocation(cs.program_for_ticks, "tick_dir"), 1.0f, 0.0f);
-  glUniform1f(glGetUniformLocation(cs.program_for_ticks, "step"),
-              (cs.bounding_rect.upper_bounds.y - cs.bounding_rect.lower_bounds.y)
-                  / static_cast<float>(cs.num_ticks - 1));
+  set_uniforms(cs.program_for_ticks, y_ufs);
   glDrawArrays(GL_POINTS, 0, cs.num_ticks);
   draw(cs.axis, 1.0f, view_to_screen, screen_to_clip, axis_color);
   const auto steps = (cs.bounding_rect.upper_bounds - cs.bounding_rect.lower_bounds)

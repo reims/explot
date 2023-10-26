@@ -2,7 +2,6 @@
 #include "GL/glew.h"
 #include <type_traits>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
 #include <fmt/format.h>
 #include <memory>
 #include <numbers>
@@ -309,15 +308,11 @@ void draw(const line_strip_state_2d &state, float width, const glm::mat4 &phase_
           const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
   glBindVertexArray(state.vao);
-  glUseProgram(state.program);
-  auto width_loc = glGetUniformLocation(state.program, "width");
-  glUniform1f(width_loc, width);
-  auto phase_to_screen_loc = glGetUniformLocation(state.program, "phase_to_screen");
-  glUniformMatrix4fv(phase_to_screen_loc, 1, GL_FALSE, glm::value_ptr(phase_to_screen));
-  auto screen_to_clip_loc = glGetUniformLocation(state.program, "screen_to_clip");
-  glUniformMatrix4fv(screen_to_clip_loc, 1, GL_FALSE, glm::value_ptr(screen_to_clip));
-  auto color_loc = glGetUniformLocation(state.program, "color");
-  glUniform4fv(color_loc, 1, glm::value_ptr(color));
+  uniform ufs[] = {{"width", width},
+                   {"phase_to_screen", phase_to_screen},
+                   {"screen_to_clip", screen_to_clip},
+                   {"color", color}};
+  set_uniforms(state.program, ufs);
   for (auto i = 0u; i < state.num_segments; ++i)
   {
     glDrawArrays(GL_LINE_STRIP, i * state.num_points_per_segment, state.num_points_per_segment);
@@ -328,17 +323,12 @@ void draw(const line_strip_state_3d &state, float width, const glm::mat4 &phase_
           const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
   glBindVertexArray(state.vao);
-  glUseProgram(state.program);
-  auto width_loc = glGetUniformLocation(state.program, "width");
-  glUniform1f(width_loc, width);
-  auto phase_to_clip_loc = glGetUniformLocation(state.program, "phase_to_clip");
-  glUniformMatrix4fv(phase_to_clip_loc, 1, GL_FALSE, glm::value_ptr(phase_to_clip));
-  auto clip_to_screen_loc = glGetUniformLocation(state.program, "clip_to_screen");
-  glUniformMatrix4fv(clip_to_screen_loc, 1, GL_FALSE, glm::value_ptr(clip_to_screen));
-  auto screen_to_clip_loc = glGetUniformLocation(state.program, "screen_to_clip");
-  glUniformMatrix4fv(screen_to_clip_loc, 1, GL_FALSE, glm::value_ptr(screen_to_clip));
-  auto color_loc = glGetUniformLocation(state.program, "color");
-  glUniform4fv(color_loc, 1, glm::value_ptr(color));
+  uniform ufs[] = {{"width", width},
+                   {"phase_to_clip", phase_to_clip},
+                   {"clip_to_screen", clip_to_screen},
+                   {"screen_to_clip", screen_to_clip},
+                   {"color", color}};
+  set_uniforms(state.program, ufs);
   for (auto i = 0u; i < state.num_segments; ++i)
   {
     glDrawArrays(GL_LINE_STRIP, i * state.num_points_per_segment, state.num_points_per_segment);
@@ -349,15 +339,11 @@ void draw(const lines_state_2d &state, float width, const glm::mat4 &phase_to_sc
           const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
   glBindVertexArray(state.vao);
-  glUseProgram(state.program);
-  auto width_loc = glGetUniformLocation(state.program, "width");
-  glUniform1f(width_loc, width);
-  auto phase_to_screen_loc = glGetUniformLocation(state.program, "phase_to_screen");
-  glUniformMatrix4fv(phase_to_screen_loc, 1, GL_FALSE, glm::value_ptr(phase_to_screen));
-  auto screen_to_clip_loc = glGetUniformLocation(state.program, "screen_to_clip");
-  glUniformMatrix4fv(screen_to_clip_loc, 1, GL_FALSE, glm::value_ptr(screen_to_clip));
-  auto color_loc = glGetUniformLocation(state.program, "color");
-  glUniform4fv(color_loc, 1, glm::value_ptr(color));
+  uniform ufs[] = {{"width", width},
+                   {"phase_to_screen", phase_to_screen},
+                   {"screen_to_clip", screen_to_clip},
+                   {"color", color}};
+  set_uniforms(state.program, ufs);
   glDrawArrays(GL_LINES, 0, state.num_points);
 }
 
@@ -365,17 +351,12 @@ void draw(const lines_state_3d &state, float width, const glm::mat4 &phase_to_cl
           const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
   glBindVertexArray(state.vao);
-  glUseProgram(state.program);
-  auto width_loc = glGetUniformLocation(state.program, "width");
-  glUniform1f(width_loc, width);
-  auto phase_to_clip_loc = glGetUniformLocation(state.program, "phase_to_clip");
-  glUniformMatrix4fv(phase_to_clip_loc, 1, GL_FALSE, glm::value_ptr(phase_to_clip));
-  auto clip_to_screen_loc = glGetUniformLocation(state.program, "clip_to_screen");
-  glUniformMatrix4fv(clip_to_screen_loc, 1, GL_FALSE, glm::value_ptr(clip_to_screen));
-  auto screen_to_clip_loc = glGetUniformLocation(state.program, "screen_to_clip");
-  glUniformMatrix4fv(screen_to_clip_loc, 1, GL_FALSE, glm::value_ptr(screen_to_clip));
-  auto color_loc = glGetUniformLocation(state.program, "color");
-  glUniform4fv(color_loc, 1, glm::value_ptr(color));
+  uniform ufs[] = {{"width", width},
+                   {"phase_to_clip", phase_to_clip},
+                   {"clip_to_screen", clip_to_screen},
+                   {"screen_to_clip", screen_to_clip},
+                   {"color", color}};
+  set_uniforms(state.program, ufs);
   glDrawArrays(GL_LINES, 0, state.num_points);
 }
 
