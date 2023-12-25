@@ -13,6 +13,7 @@
 #include "settings.hpp"
 #include "overload.hpp"
 #include <numbers>
+#include <algorithm>
 
 namespace
 {
@@ -306,17 +307,30 @@ struct string
   static constexpr auto value = lexy::as_string<std::string>;
 };
 
+struct title
+{
+  static constexpr auto rule = LEXY_KEYWORD("title", kw_id) + dsl::p<string>;
+  static constexpr auto value = lexy::forward<std::string>;
+};
+
 struct plot
 {
   static constexpr auto whitespace = dsl::ascii::space;
 
-  using data_ast = std::variant<expr, std::string>;
+  struct csv_data
+  {
+    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
+    static constexpr auto value = lexy::callback<csv_data_2d>(
+        [](std::string path, const std::vector<expr> exprs) {
+          return csv_data_2d{std::move(path), {exprs[0], exprs[1]}};
+        });
+  };
 
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<string>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
                                  | dsl::peek_not(str_delim) >> dsl::p<expr_>;
-    static constexpr auto value = lexy::construct<data_ast>;
+    static constexpr auto value = lexy::construct<data_source_2d>;
   };
 
   struct graph
@@ -327,37 +341,29 @@ struct plot
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
           dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("using", kw_id)) >> dsl::p<usingp>);
+                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_2d>(
           [] { return graph_desc_2d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, const std::vector<expr> &exprs) {
-            g.data = csv_data_2d{"", {exprs[0], exprs[1]}};
-          });
+          [](auto &g, std::string title) { g.title = std::move(title); });
     };
 
-    static constexpr auto rule = dsl::p<data> + dsl::p<directives>;
+    static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
     static constexpr auto value = lexy::callback<graph_desc_2d>(
-        [](data_ast d, graph_desc_2d g)
+        [](const char *s, data_source_2d d, const char *e, graph_desc_2d g)
         {
-          std::visit(overload(
-                         [&](std::string &&path)
-
-                         {
-                           if (std::holds_alternative<csv_data_2d>(g.data))
-                           {
-                             std::get<csv_data_2d>(g.data).path = std::move(path);
-                           }
-                           else
-                           {
-                             g.data = csv_data_2d{std::move(path), {data_ref{1}, data_ref{2}}};
-                           }
-                         },
-                         [&](expr &&e)
-                         {
-                           assert(std::holds_alternative<expr>(g.data));
-                           g.data = std::move(e);
-                         }),
-                     std::move(d));
+          g.data = d;
+          if (g.title.empty())
+          {
+            while (s != e && std::isspace(*s))
+            {
+              ++s;
+            }
+            while (s != e && std::isspace(*(e - 1)))
+            {
+              --e;
+            }
+            g.title = std::string(s, e);
+          }
           return g;
         });
   };
@@ -393,15 +399,24 @@ struct parametric_plot
 
   using data_ast = std::variant<std::string, std::pair<expr, expr>>;
 
+  struct csv_data
+  {
+    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
+    static constexpr auto value = lexy::callback<csv_data_2d>(
+        [](std::string path, const std::vector<expr> exprs) {
+          return csv_data_2d{std::move(path), {exprs[0], exprs[1]}};
+        });
+  };
+
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<string>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
                                  | dsl::peek_not(str_delim)
                                        >> dsl::twice(dsl::p<expr_>, dsl::sep(dsl::comma));
-    static constexpr auto value =
-        lexy::callback<data_ast>([](std::string s) -> data_ast { return data_ast(std::move(s)); },
-                                 [](expr x, expr y) -> data_ast
-                                 { return data_ast(std::make_pair(std::move(x), std::move(y))); });
+    static constexpr auto value = lexy::callback<data_source_2d>(lexy::forward<csv_data_2d>,
+                                                                 [](expr x, expr y) {
+                                                                   return parametric_data_2d{x, y};
+                                                                 });
   };
 
   struct graph
@@ -412,37 +427,28 @@ struct parametric_plot
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
           dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("using", kw_id)) >> dsl::p<usingp>);
+                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_2d>(
           [] { return graph_desc_2d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, const std::vector<expr> &exprs)
-          {
-            auto &d = std::get<csv_data_2d>(g.data);
-            d.expressions[0] = exprs[0];
-            d.expressions[1] = exprs[1];
-          });
+          [](auto &g, std::string title) { g.title = std::move(title); });
     };
 
-    static constexpr auto rule = dsl::p<data> + dsl::p<directives>;
+    static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
     static constexpr auto value = lexy::callback<graph_desc_2d>(
-        [](data_ast d, graph_desc_2d g)
+        [](const char *s, data_source_2d d, const char *e, graph_desc_2d g)
         {
-          if (std::holds_alternative<std::string>(d))
+          g.data = std::move(d);
+          if (g.title.empty())
           {
-            if (std::holds_alternative<csv_data_2d>(g.data))
+            while (s != e && std::isspace(*s))
             {
-              std::get<csv_data_2d>(g.data).path = std::move(std::get<std::string>(d));
+              ++s;
             }
-            else
+            while (s != e && std::isspace(*(e - 1)))
             {
-              g.data = csv_data_2d{std::move(std::get<std::string>(d)), {data_ref{1}, data_ref{2}}};
+              --e;
             }
-          }
-          else
-          {
-            assert(std::holds_alternative<expr>(g.data));
-            auto &p = std::get<std::pair<expr, expr>>(d);
-            g.data = parametric_data_2d{std::move(p.first), std::move(p.second)};
+            g.title = std::string(s, e);
           }
           return g;
         });
@@ -481,13 +487,20 @@ struct splot
 {
   static constexpr auto whitespace = dsl::ascii::space;
 
-  using data_ast = std::variant<expr, std::string>;
+  struct csv_data
+  {
+    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
+    static constexpr auto value = lexy::callback<csv_data_3d>(
+        [](std::string path, const std::vector<expr> exprs) {
+          return csv_data_3d{std::move(path), {exprs[0], exprs[1], exprs[2]}};
+        });
+  };
 
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<string>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
                                  | dsl::peek_not(str_delim) >> dsl::p<expr_>;
-    static constexpr auto value = lexy::forward<data_ast>;
+    static constexpr auto value = lexy::construct<data_source_3d>;
   };
 
   struct graph
@@ -498,41 +511,29 @@ struct splot
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
           dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("using", kw_id)) >> dsl::p<usingp>);
+                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_3d>(
           [] { return graph_desc_3d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, const std::vector<expr> &exprs)
-          {
-            auto &d = std::get<csv_data_3d>(g.data);
-            d.expressions[0] = exprs[0];
-            d.expressions[1] = exprs[1];
-            d.expressions[2] = exprs[2];
-          });
+          [](auto &g, std::string title) { g.title = std::move(title); });
     };
 
-    static constexpr auto rule = dsl::p<data> + dsl::p<directives>;
+    static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
     static constexpr auto value = lexy::callback<graph_desc_3d>(
-        [](data_ast d, graph_desc_3d g)
+        [](const char *s, data_source_3d d, const char *e, graph_desc_3d g)
         {
-          std::visit(overload(
-                         [&](std::string path)
-                         {
-                           if (std::holds_alternative<csv_data_3d>(g.data))
-                           {
-                             std::get<csv_data_3d>(g.data).path = std::move(path);
-                           }
-                           else
-                           {
-                             g.data = csv_data_3d{std::move(path),
-                                                  {data_ref{1}, data_ref{2}, data_ref{3}}};
-                           }
-                         },
-                         [&](expr e)
-                         {
-                           assert(std::holds_alternative<expr>(g.data));
-                           g.data = std::move(e);
-                         }),
-                     std::move(d));
+          if (g.title.empty())
+          {
+            while (s != e && std::isspace(*s))
+            {
+              ++s;
+            }
+            while (s != e && std::isspace(*(e - 1)))
+            {
+              --e;
+            }
+            g.title = std::string(s, e);
+          }
+          g.data = std::move(d);
           return g;
         });
   };
@@ -566,18 +567,25 @@ struct parametric_splot
 {
   static constexpr auto whitespace = dsl::ascii::space;
 
-  using data_ast = std::variant<std::string, std::array<expr, 3>>;
+  struct csv_data
+  {
+    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
+    static constexpr auto value = lexy::callback<csv_data_3d>(
+        [](std::string path, const std::vector<expr> exprs) {
+          return csv_data_3d{std::move(path), {exprs[0], exprs[1], exprs[2]}};
+        });
+  };
 
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<string>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
                                  | dsl::peek_not(str_delim)
                                        >> dsl::times<3>(dsl::p<expr_>, dsl::sep(dsl::lit_c<','>));
-    static constexpr auto value = lexy::callback<data_ast>(
-        [](const std::string &s) { return s; },
-        [](expr x, expr y, expr z) {
-          return std::array<expr, 3>{std::move(x), std::move(y), std::move(z)};
-        });
+    static constexpr auto value =
+        lexy::callback<data_source_3d>(lexy::forward<csv_data_3d>,
+                                       [](expr x, expr y, expr z) {
+                                         return parametric_data_3d{x, y, z};
+                                       });
   };
 
   struct graph
@@ -588,42 +596,29 @@ struct parametric_splot
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
           dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("using", kw_id)) >> dsl::p<usingp>);
+                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_3d>(
           [] { return graph_desc_3d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, const std::vector<expr> &exprs)
-          {
-            auto &d = std::get<csv_data_3d>(g.data);
-            d.expressions[0] = exprs[0];
-            d.expressions[1] = exprs[1];
-            d.expressions[2] = exprs[2];
-          });
+          [](auto &g, std::string title) { g.title = std::move(title); });
     };
 
-    static constexpr auto rule = dsl::p<data> + dsl::p<directives>;
+    static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
     static constexpr auto value = lexy::callback<graph_desc_3d>(
-        [](data_ast d, graph_desc_3d g)
+        [](const char *s, data_source_3d d, const char *e, graph_desc_3d g)
         {
-          std::visit(overload(
-                         [&](const std::string &path) mutable
-                         {
-                           if (std::holds_alternative<csv_data_3d>(g.data))
-                           {
-                             std::get<csv_data_3d>(g.data).path = std::move(path);
-                           }
-                           else
-                           {
-                             g.data = csv_data_3d{std::move(path),
-                                                  {data_ref{1}, data_ref{2}, data_ref{3}}};
-                           }
-                         },
-                         [&](const std::array<expr, 3> &exprs) mutable
-                         {
-                           assert(!std::holds_alternative<csv_data_3d>(g.data));
-                           g.data = parametric_data_3d{std::move(exprs[0]), std::move(exprs[1]),
-                                                       std::move(exprs[2])};
-                         }),
-                     d);
+          if (g.title.empty())
+          {
+            while (s != e && std::isspace(*s))
+            {
+              ++s;
+            }
+            while (s != e && std::isspace(*(e - 1)))
+            {
+              --e;
+            }
+            g.title = std::string(s, e);
+          }
+          g.data = std::move(d);
           return g;
         });
   };

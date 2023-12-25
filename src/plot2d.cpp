@@ -33,15 +33,18 @@ plot2d make_plot2d(const plot_command_2d &cmd)
     }
   }
 
-  return plot2d{bounding.value_or(clip_rect), std::move(graphs)};
+  return plot2d{bounding.value_or(clip_rect), std::move(graphs), legend(cmd.graphs)};
 }
 
-void draw(const plot2d &plot, const glm::mat4 &view_to_screen, const glm::mat4 &screen_to_clip)
+void draw(const plot2d &plot, const rect &screen, const rect &view)
 {
+  const auto view_to_screen = transform(view, screen);
+  const auto screen_to_clip = transform(screen, clip_rect);
   assert(plot.graphs.size <= num_graph_colors);
   for (std::size_t i = 0; i < plot.graphs.size; ++i)
   {
     draw(plot.graphs[i], 2.0f, view_to_screen, screen_to_clip, graph_colors[i]);
   }
+  draw(plot.legend, screen, screen_to_clip);
 }
 } // namespace explot

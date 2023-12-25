@@ -229,7 +229,7 @@ static constexpr auto uimain = [](auto commands)
                                     {
                                       auto view_to_screen = transform(view, screen);
                                       auto screen_to_clip = transform(screen, clip_rect);
-                                      draw(const_get(res).plot, view_to_screen, screen_to_clip);
+                                      draw(const_get(res).plot, screen, view);
                                       draw(*cs, view_to_screen, screen_to_clip, 1.0f, 5.0f);
                                       return unit{};
                                     },

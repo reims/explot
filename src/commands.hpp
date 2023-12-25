@@ -83,6 +83,7 @@ struct graph_desc_2d final
 {
   data_source_2d data;
   mark_type mark;
+  std::string title;
 };
 
 struct plot_command_2d final
@@ -112,6 +113,7 @@ struct graph_desc_3d final
 {
   data_source_3d data;
   mark_type mark;
+  std::string title;
 };
 
 struct plot_command_3d final

@@ -43,16 +43,9 @@ auto bounding_rect_for_graphs(std::span<const graph3d> graphs)
 
 namespace explot
 {
-plot3d::plot3d(graph3d g)
-    : graphs(std::make_unique<graph3d[]>(1), 1),
-      phase_space(round_for_ticks_3d(bounding_rect(g), 7, 2)), cs(phase_space, 7)
-{
-  graphs[0] = std::move(g);
-}
-
 plot3d::plot3d(const plot_command_3d &cmd)
     : graphs(graphs_for_descs(cmd.graphs, cmd)), phase_space(bounding_rect_for_graphs(graphs)),
-      cs(phase_space, 7)
+      cs(phase_space, 7), legend(cmd.graphs)
 {
 }
 
@@ -76,5 +69,6 @@ void draw(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &vie
          graph_colors[i]);
   }
   draw(plot.cs, view_to_clip * phase_to_view, clip_to_screen, screen_to_clip);
+  draw(plot.legend, screen, screen_to_clip);
 }
 } // namespace explot

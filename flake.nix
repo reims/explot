@@ -14,6 +14,7 @@
               clang-tools_16
               clang_16
               llvmPackages_16.libcxx
+              lldb_15
               cmake
               fmt
               ctre

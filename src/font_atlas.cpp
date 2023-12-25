@@ -50,7 +50,7 @@ void main()
   float sd = median(msdf.x, msdf.y, msdf.z);
   float s = 4.0 * scale;
   float dist = clamp(s * (sd - 0.5) + 0.5, 0, 1);
-  float alpha = max(0.0, 1 - dist);
+  float alpha = max(0.0, dist);
   FragColor = vec4(color.xyz, alpha);
 }
 )shader";
@@ -203,6 +203,11 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
   auto y_upper_bound = std::numeric_limits<float>::lowest();
   for (auto i = 0ULL; i < str.size(); ++i)
   {
+    if (std::isspace(str[i]))
+    {
+      width += 5;
+      continue;
+    }
     auto idx = static_cast<std::size_t>(
         std::distance(std::begin(atlas.glyphs),
                       std::find(std::begin(atlas.glyphs), std::end(atlas.glyphs), str[i])));
