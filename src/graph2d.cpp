@@ -4,7 +4,7 @@
 
 namespace explot
 {
-graph2d::graph2d(data_desc data, mark_type mark)
+graph2d::graph2d(data_desc data, mark_type mark, line_type lt)
     : graph(
         [&]() -> typename graph2d::state
         {
@@ -17,18 +17,18 @@ graph2d::graph2d(data_desc data, mark_type mark)
           }
           throw "bad";
         }()),
-      data(std::move(data))
+      data(std::move(data)), lt(lt)
 {
 }
 
-void draw(const graph2d &graph, float width, const glm::mat4 &view_to_screen,
-          const glm::mat4 &screen_to_clip, const glm::vec4 &color)
+void draw(const graph2d &graph, const glm::mat4 &view_to_screen, const glm::mat4 &screen_to_clip)
 {
-  std::visit(overload([&](const points_2d_state &s)
-                      { draw(s, width, 9.0f, color, view_to_screen, screen_to_clip); },
-                      [&](const line_strip_state_2d &s)
-                      { draw(s, width, view_to_screen, screen_to_clip, color); }),
-             graph.graph);
+  std::visit(
+      overload([&](const points_2d_state &s)
+               { draw(s, graph.lt.width, 9.0f, graph.lt.color, view_to_screen, screen_to_clip); },
+               [&](const line_strip_state_2d &s)
+               { draw(s, graph.lt.width, view_to_screen, screen_to_clip, graph.lt.color); }),
+      graph.graph);
 }
 
 rect bounding_rect(const graph2d &graph) { return bounding_rect_2d(graph.data); }

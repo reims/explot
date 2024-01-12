@@ -54,7 +54,7 @@ data_desc make_line_data()
 namespace explot
 {
 
-legend::legend(std::span<const graph_desc_2d> graphs)
+legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts)
     : font(make_font_atlas(glyphs_for_graphs(graphs)).value()), point_data(make_point_data()),
       line_data(make_line_data())
 {
@@ -75,11 +75,13 @@ legend::legend(std::span<const graph_desc_2d> graphs)
   }
 }
 
-legend::legend(std::span<const graph_desc_3d> graphs)
+legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts)
     : font(make_font_atlas(glyphs_for_graphs(graphs)).value()), point_data(make_point_data()),
       line_data(make_line_data())
 {
   int i = 0;
+  titles.reserve(graphs.size());
+  colors.reserve(graphs.size());
   for (const auto &g : graphs)
   {
     switch (g.mark)
@@ -92,7 +94,7 @@ legend::legend(std::span<const graph_desc_3d> graphs)
       break;
     }
     titles.push_back(make_gl_string(font, g.title));
-    colors.push_back(graph_colors[(i++) % num_graph_colors]);
+    colors.push_back(lts[i++].color);
   }
 }
 

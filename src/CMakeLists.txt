@@ -23,6 +23,8 @@ add_executable(explot
   coordinate_system_3d.cpp
   program.cpp
   legend.cpp
+  colors.cpp
+  line_type.cpp
   ../msdfgen/ext/import-font.cpp
 )
 

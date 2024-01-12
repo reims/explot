@@ -8,6 +8,7 @@
 #include "line_drawing.hpp"
 #include "point_drawing.hpp"
 #include "commands.hpp"
+#include "line_type.hpp"
 
 namespace explot
 {
@@ -22,8 +23,8 @@ struct legend final
   data_desc point_data;
   data_desc line_data;
 
-  legend(std::span<const graph_desc_2d> graphs);
-  legend(std::span<const graph_desc_3d> graphs);
+  legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts);
+  legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts);
 };
 
 void draw(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip);

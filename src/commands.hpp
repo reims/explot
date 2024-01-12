@@ -59,6 +59,14 @@ struct var_or_call final
   std::optional<std::vector<expr>> params;
 };
 
+struct line_type_spec
+{
+  std::optional<glm::vec4> color;
+  std::optional<float> width;
+};
+
+using line_type_desc = std::variant<line_type_spec, int>;
+
 struct csv_data_2d final
 {
   std::string path;
@@ -84,6 +92,7 @@ struct graph_desc_2d final
   data_source_2d data;
   mark_type mark;
   std::string title;
+  line_type_desc line_type;
 };
 
 struct plot_command_2d final
@@ -114,6 +123,7 @@ struct graph_desc_3d final
   data_source_3d data;
   mark_type mark;
   std::string title;
+  line_type_desc line_type;
 };
 
 struct plot_command_3d final

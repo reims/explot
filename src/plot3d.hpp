@@ -16,6 +16,9 @@ struct plot3d final
   rect phase_space;
   coordinate_system_3d cs;
   legend legend;
+
+private:
+  plot3d(const plot_command_3d &cmd, std::span<const line_type> lts);
 };
 
 void draw(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,

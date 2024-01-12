@@ -14,6 +14,7 @@
 #include "overload.hpp"
 #include <numbers>
 #include <algorithm>
+#include "colors.hpp"
 
 namespace
 {
@@ -241,12 +242,100 @@ struct const_expr_ : lexy::expression_production
       [](float e) { return e; });
 };
 
+struct named_color : lexy::scan_production<glm::vec4>, lexy::token_production
+{
+  struct unknown_color
+  {
+  };
+
+  template <typename context, typename reader>
+  static constexpr scan_result scan(lexy::rule_scanner<context, reader> &scanner)
+  {
+    auto begin_name = scanner.position();
+    while (!scanner.peek(dsl::lit_c<'"'>))
+    {
+      if (scanner.is_at_eof())
+      {
+        return lexy::scan_failed;
+      }
+      else
+      {
+        scanner.parse(dsl::code_point);
+      }
+    }
+    auto end_name = scanner.position();
+    auto name = std::string_view(begin_name, end_name);
+    auto color = get_named_color(name);
+    if (color.has_value())
+    {
+      return color.value();
+    }
+    else
+    {
+      scanner.error(unknown_color{}, scanner.begin(), end_name);
+      return lexy::scan_failed;
+    }
+  }
+};
+
+struct hex_color : lexy::token_production
+{
+  static constexpr auto
+      rule = dsl::lit_c<'#'> >> dsl::position
+                                    + dsl::times<6>(LEXY_ASCII_ONE_OF("0123456789abcdefABCDEF"))
+                                    + dsl::position;
+  static constexpr auto value = lexy::callback<glm::vec4>(
+      [](const char *s, const char *e)
+      {
+        int rgb;
+        auto _ = std::from_chars(s, e, rgb, 16);
+        return from_rgb(rgb);
+      });
+};
+
+struct color
+{
+  static constexpr auto rule =
+      dsl::lit_c<'"'> + (dsl::p<hex_color> | dsl::else_ >> dsl::p<named_color>)+dsl::lit_c<'"'>;
+  static constexpr auto value = lexy::forward<glm::vec4>;
+};
+
+struct line_type
+{
+  struct width
+  {
+    static constexpr auto rule = LEXY_KEYWORD("width", kw_id) >> dsl::p<parsed_decimal>;
+    static constexpr auto value = lexy::forward<float>;
+  };
+
+  struct color_directive
+  {
+    static constexpr auto rule = LEXY_KEYWORD("rgb", kw_id) >> dsl::p<color>;
+    static constexpr auto value = lexy::forward<glm::vec4>;
+  };
+
+  static constexpr auto rule = dsl::partial_combination(dsl::p<width>, dsl::p<color_directive>);
+  static constexpr auto value = lexy::fold_inplace<line_type_spec>(
+      [] { return line_type_spec{}; }, [](line_type_spec &lt, float width) { lt.width = width; },
+      [](line_type_spec &lt, glm::vec4 color) { lt.color = color; });
+};
+
+struct line_type_or_ref
+{
+  static constexpr auto rule =
+      dsl::digit<> >> dsl::p<parsed_decimal> | dsl::else_ >> dsl::p<line_type>;
+  static constexpr auto value = lexy::callback<line_type_desc>(
+      [](float idx) { return line_type_desc{static_cast<int>(idx)}; },
+      [](const line_type_spec &lt) { return line_type_desc{lt}; });
+};
+
 struct range
 {
   struct rvalue
   {
-    static constexpr auto rule =
-        dsl::opt(dsl::lit_c<'*'> | (dsl::peek_not(dsl::lit_c<'*'>) >> dsl::p<const_expr_>));
+    static constexpr auto whitespace = dsl::ascii::space;
+    static constexpr auto rule = dsl::lit_c<'*'> | (dsl::peek(dsl::lit_c<']'>) >> dsl::nullopt)
+                                 | (dsl::else_ >> dsl::p<const_expr_>);
     static constexpr auto value =
         lexy::callback<range_value>([] { return range_value(auto_scale{}); },
                                     [](lexy::nullopt) { return range_value(std::nullopt); },
@@ -267,8 +356,7 @@ struct ranges
 struct with
 {
   static constexpr auto whitespace = dsl::ascii::space;
-  static constexpr auto rule = LEXY_KEYWORD("with", kw_id) >> (dsl::capture(LEXY_LIT("lines"))
-                                                               | dsl::capture(LEXY_LIT("points")));
+  static constexpr auto rule = dsl::capture(LEXY_LIT("lines")) | dsl::capture(LEXY_LIT("points"));
   static constexpr auto value = lexy::callback<mark_type>(
       [](const auto &s)
       {
@@ -309,7 +397,7 @@ struct string
 
 struct title
 {
-  static constexpr auto rule = LEXY_KEYWORD("title", kw_id) + dsl::p<string>;
+  static constexpr auto rule = dsl::p<string>;
   static constexpr auto value = lexy::forward<std::string>;
 };
 
@@ -340,11 +428,13 @@ struct plot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+                                   LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
+                                   LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type_or_ref>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_2d>(
-          [] { return graph_desc_2d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, std::string title) { g.title = std::move(title); });
+          [] { return graph_desc_2d{}; }, [](graph_desc_2d &g, mark_type m) { g.mark = m; },
+          [](graph_desc_2d &g, std::string title) { g.title = std::move(title); },
+          [](graph_desc_2d &g, const line_type_desc &lt) { g.line_type = lt; });
     };
 
     static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
@@ -426,11 +516,13 @@ struct parametric_plot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+                                   LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
+                                   LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type_or_ref>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_2d>(
           [] { return graph_desc_2d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, std::string title) { g.title = std::move(title); });
+          [](auto &g, std::string title) { g.title = std::move(title); },
+          [](graph_desc_2d &g, const line_type_desc &lt) { g.line_type = lt; });
     };
 
     static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
@@ -510,11 +602,13 @@ struct splot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+                                   LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
+                                   LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type_or_ref>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_3d>(
           [] { return graph_desc_3d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, std::string title) { g.title = std::move(title); });
+          [](auto &g, std::string title) { g.title = std::move(title); },
+          [](graph_desc_3d &g, const line_type_desc &lt) { g.line_type = lt; });
     };
 
     static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
@@ -595,11 +689,13 @@ struct parametric_splot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(dsl::peek(LEXY_KEYWORD("with", kw_id)) >> dsl::p<with>,
-                                   dsl::peek(LEXY_KEYWORD("title", kw_id)) >> dsl::p<title>);
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+                                   LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
+                                   LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_3d>(
           [] { return graph_desc_3d{}; }, [](auto &g, mark_type m) { g.mark = m; },
-          [](auto &g, std::string title) { g.title = std::move(title); });
+          [](auto &g, std::string title) { g.title = std::move(title); },
+          [](graph_desc_3d &g, const line_type_desc &lt) { g.line_type = lt; });
     };
 
     static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
@@ -727,7 +823,6 @@ std::optional<command> parse_command(const char *cmd)
     auto matched = settings::parametric()
                        ? lexy::parse<r::parametric_plot>(input, lexy_ext::report_error)
                        : lexy::parse<r::plot>(input, lexy_ext::report_error);
-    fmt::print("matched: {}\n", matched.is_success());
     if (matched.is_success())
     {
       return matched.value();
@@ -742,7 +837,6 @@ std::optional<command> parse_command(const char *cmd)
     auto matched = settings::parametric()
                        ? lexy::parse<r::parametric_splot>(input, lexy_ext::report_error)
                        : lexy::parse<r::splot>(input, lexy_ext::report_error);
-    fmt::print("matched: {}\n", matched.is_success());
     if (matched.is_success())
     {
       // auto &d = std::get<parametric_data_3d>(matched.value().graphs[0].data);

@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <span>
 #include <string>
+#include "line_type.hpp"
 
 namespace explot
 {
@@ -20,6 +21,8 @@ samples_setting samples();
 samples_setting isosamples();
 
 bool parametric();
+
+const line_type &line_type_by_index(int idx);
 
 namespace datafile
 {

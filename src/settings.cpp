@@ -7,6 +7,7 @@
 #include <ctre.hpp>
 #include "overload.hpp"
 #include "parse_commands.hpp"
+#include "colors.hpp"
 
 namespace
 {
@@ -191,6 +192,11 @@ std::optional<settings_value> get_value(std::span<const std::string> path)
     return std::nullopt;
   }
 }
+
+static constexpr line_type line_types[] = {line_type{1.f, from_rgb(0xa3be8c)},
+                                           line_type{1.f, from_rgb(0xebcb8b)},
+                                           line_type{1.f, from_rgb(0xd08770)}};
+static constexpr auto num_line_types = std::extent_v<decltype(line_types)>;
 } // namespace
 
 namespace explot
@@ -227,6 +233,12 @@ samples_setting samples() { return settings_v.samples; }
 samples_setting isosamples() { return settings_v.isosamples; }
 
 bool parametric() { return settings_v.parametric; }
+
+const line_type &line_type_by_index(int idx)
+{
+  assert(idx > 0);
+  return line_types[(idx - 1) % num_line_types];
+}
 
 namespace datafile
 {

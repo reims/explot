@@ -2,6 +2,8 @@
 
 #include <glm/vec4.hpp>
 #include <type_traits>
+#include <optional>
+#include <string_view>
 
 namespace explot
 {
@@ -20,4 +22,6 @@ inline constexpr glm::vec4 background_color = from_rgb(0x4c566a);
 inline constexpr glm::vec4 axis_color = from_rgb(0xd8dee9);
 inline constexpr glm::vec4 text_color = from_rgb(0x88c0d0);
 inline constexpr glm::vec4 selection_color = from_rgb(0xebcb8b);
+
+std::optional<glm::vec4> get_named_color(std::string_view name);
 } // namespace explot
