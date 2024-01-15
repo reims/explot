@@ -25,6 +25,7 @@ add_executable(explot
   legend.cpp
   colors.cpp
   line_type.cpp
+  rx-renderers.cpp
   ../msdfgen/ext/import-font.cpp
 )
 
