@@ -12,11 +12,13 @@
 #include "settings.hpp"
 #include <thread>
 #include "rx-renderers.hpp"
+#include <atomic>
+#include <semaphore>
 
 namespace
 {
 using namespace std::literals::chrono_literals;
-
+using namespace explot;
 void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
                       const GLchar *message, const void *userParam)
 {
@@ -26,10 +28,11 @@ void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GL
   }
 }
 
+static std::atomic<bool> thread_running = false;
+static std::binary_semaphore ready_for_cmds(0);
+
 static constexpr auto uimain = [](auto commands)
 {
-  using namespace explot;
-
   if (!glfwInit())
   {
     return;
@@ -72,41 +75,10 @@ static constexpr auto uimain = [](auto commands)
 
   rxcpp::subjects::behavior<rect> screen_space_subject(rect{});
   auto screen_space = screen_space_subject.get_observable() | rx::distinct_until_changed();
-  //                      | rx::publish() | rx::ref_count();
+
   auto screen_space_out = screen_space_subject.get_subscriber();
 
   auto renderers = std::vector<rx::observable<unit>>{};
-  auto show_renderer = commands
-                       | rx::transform(
-                           [](const command &cmd)
-                           {
-                             if (std::holds_alternative<show_command>(cmd))
-                             {
-                               fmt::print("{}\n", settings::show(std::get<show_command>(cmd).path));
-                             }
-                             return unit{};
-                           });
-  renderers.push_back(show_renderer);
-  auto set_renderer = commands
-                      | rx::transform(
-                          [](const command &cmd)
-                          {
-                            if (std::holds_alternative<set_command>(cmd))
-                            {
-                              const auto &set_cmd = std::get<set_command>(cmd);
-                              if (settings::set(set_cmd.path, set_cmd.value))
-                              {
-                                fmt::print("set value\n");
-                              }
-                              else
-                              {
-                                fmt::print("set failed\n");
-                              }
-                            }
-                            return unit{};
-                          });
-  renderers.push_back(set_renderer);
-
   auto plot_commands = commands | rx::filter(is_plot_command)
                        | rx::transform([](const command &cmd) { return as_plot_command(cmd); });
 
@@ -125,8 +97,13 @@ static constexpr auto uimain = [](auto commands)
   rx::composite_subscription lifetime;
   rx::iterate(renderers) | rx::merge() | rx::subscribe<unit>(lifetime, [](unit) {});
 
-  commands | rx::filter(is_quit_command) | to_unit() | rx::observe_on(on_run_loop)
+  auto q_presses =
+      key_presses() | rx::filter([](int key) { return key == GLFW_KEY_Q; }) | to_unit();
+  commands | rx::filter(is_quit_command) | to_unit() | rx::merge(q_presses)
+      | rx::observe_on(on_run_loop)
       | rx::subscribe<unit>(lifetime, [=](unit) { glfwSetWindowShouldClose(window, GL_TRUE); });
+
+  ready_for_cmds.release();
 
   while (!glfwWindowShouldClose(window))
   {
@@ -155,6 +132,8 @@ static constexpr auto uimain = [](auto commands)
 
   glfwDestroyWindow(window);
   glfwTerminate();
+
+  thread_running.store(false);
 };
 
 } // namespace
@@ -167,8 +146,7 @@ int main()
   linenoiseHistorySetMaxLen(100);
   linenoiseHistoryLoad("build/src/history");
 
-  auto uithread =
-      std::jthread(uimain, cmd_subject.get_observable() | rx::publish() | rx::ref_count());
+  auto uithread = std::optional<std::jthread>();
 
   for (auto line_ptr = std::unique_ptr<char>(linenoise("> ")); line_ptr != nullptr;
        line_ptr.reset(linenoise("> ")))
@@ -177,10 +155,36 @@ int main()
     auto cmd = explot::parse_command(line_ptr.get());
     if (cmd.has_value())
     {
-      cmd_subscriber.on_next(cmd.value());
       if (std::holds_alternative<explot::quit_command>(cmd.value()))
       {
+        cmd_subscriber.on_next(cmd.value());
         break;
+      }
+      else if (std::holds_alternative<show_command>(cmd.value()))
+      {
+        fmt::print("{}\n", settings::show(std::get<show_command>(cmd.value()).path));
+      }
+      else if (std::holds_alternative<set_command>(cmd.value()))
+      {
+        const auto &set_cmd = std::get<set_command>(cmd.value());
+        if (settings::set(set_cmd.path, set_cmd.value))
+        {
+          fmt::print("set value\n");
+        }
+        else
+        {
+          fmt::print("set failed\n");
+        }
+      }
+      else
+      {
+        if (!thread_running.load())
+        {
+          uithread = std::jthread(uimain, cmd_subject.get_observable());
+          thread_running.store(true);
+          ready_for_cmds.acquire();
+        }
+        cmd_subscriber.on_next(cmd.value());
       }
     }
     else
