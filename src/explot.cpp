@@ -14,6 +14,8 @@
 #include "rx-renderers.hpp"
 #include <atomic>
 #include <semaphore>
+#include <cstdlib>
+#include <filesystem>
 
 namespace
 {
@@ -136,6 +138,22 @@ static constexpr auto uimain = [](auto commands)
   thread_running.store(false);
 };
 
+std::filesystem::path get_data_dir()
+{
+  const auto data_dir_ptr = std::getenv("XDG_DATA_HOME");
+  if (data_dir_ptr == nullptr)
+  {
+    const auto home = std::getenv("HOME");
+    if (home == nullptr)
+    {
+      fmt::println("$HOME and $XDG_DATA_HOME not set");
+      return std::filesystem::current_path();
+    }
+    return std::filesystem::path(home) / ".local" / "share" / "explot";
+  }
+  return std::filesystem::path(data_dir_ptr) / "explot";
+}
+
 } // namespace
 
 int main()
@@ -143,8 +161,13 @@ int main()
   auto cmd_subject = rx::subjects::subject<explot::command>();
   auto cmd_subscriber = cmd_subject.get_subscriber();
 
+  const auto data_dir = get_data_dir();
+
+  std::filesystem::create_directories(data_dir);
+  const auto history_path = data_dir / "history";
+
   linenoiseHistorySetMaxLen(100);
-  linenoiseHistoryLoad("build/src/history");
+  linenoiseHistoryLoad(history_path.c_str());
 
   auto uithread = std::optional<std::jthread>();
 
@@ -193,7 +216,7 @@ int main()
     }
   }
 
-  linenoiseHistorySave("build/src/history");
+  linenoiseHistorySave(history_path.c_str());
 
   return 0;
 }
