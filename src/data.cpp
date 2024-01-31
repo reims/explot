@@ -11,6 +11,7 @@
 #include <ranges>
 #include <string_view>
 #include "program.hpp"
+#include <unordered_map>
 
 using namespace std::literals;
 
@@ -324,32 +325,67 @@ program_handle program_for_expressions(const std::array<expr, 3> &expressions,
   return make_program_with_varying(shader_str.c_str(), "v");
 }
 
-void setup_vao(GLuint vao, GLuint vbo, std::size_t num_indices)
+struct row_data
 {
-  assert(num_indices > 0);
-  glBindVertexArray(vao);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  for (auto i = 0U; i < num_indices; ++i)
+  std::string filename;
+  std::vector<int> indices;
+  data_desc data;
+};
+
+template <typename T>
+std::vector<row_data> row_data_for_graphs_2d(const T &gs)
+{
+  auto files = std::unordered_map<std::string_view, std::vector<int>>();
+  for (const auto &g : gs)
   {
-    glEnableVertexAttribArray(i);
-    glVertexAttribPointer(i, 1, GL_FLOAT, GL_FALSE, num_indices * sizeof(float),
-                          (void *)(i * sizeof(float)));
+    if (g.data.index() != 1)
+    {
+      continue;
+    }
+    else
+    {
+      const auto &d = std::get<1>(g.data);
+      auto &indices = files[d.path];
+      auto new_indices = extract_indices(d.expressions);
+      indices.reserve(indices.size() + new_indices.size());
+      std::ranges::copy(new_indices, std::back_inserter(indices));
+    }
   }
+
+  auto result = std::vector<row_data>();
+  result.reserve(files.size());
+  for (auto &[f, indices] : files)
+  {
+    std::ranges::sort(indices);
+    indices.erase(std::ranges::unique(indices).begin(), indices.end());
+    auto num_indices = indices.size();
+    auto data = read_csv(f, settings::datafile::separator(), indices);
+    assert(data.size() % num_indices == 0);
+    auto num_points = data.size() / num_indices;
+    auto csv_vbo = make_vbo();
+    auto vao = make_vao();
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
+    glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
+    result.emplace_back(std::string(f), std::move(indices),
+                        data_desc(std::move(csv_vbo), num_points));
+  }
+  return result;
 }
-template <std::size_t N>
-data_desc data_for_expressions_helper(std::string_view path, const std::array<expr, N> &expressions)
+
+template <typename T>
+data_desc data_for_csv(const T &data, std::span<const row_data> row_data)
 {
+  // why is the struct keyword necessary in the lambda
+  auto r = std::ranges::find_if(row_data,
+                                [&](const struct row_data &d) { return d.filename == data.path; });
+  assert(r != row_data.end());
+  const auto num_indices = r->indices.size();
+  const auto num_points = r->data.num_points;
   auto vao = make_vao();
-  auto indices = extract_indices(expressions);
-  auto num_indices = indices.size();
-  assert(num_indices > 0);
-  auto data = read_csv(path, settings::datafile::separator(), indices);
-  assert(data.size() % num_indices == 0);
-  auto num_points = data.size() / num_indices;
-  auto csv_vbo = make_vbo();
   glBindVertexArray(vao);
+  auto &csv_vbo = r->data.vbo;
   glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
-  glBufferData(GL_ARRAY_BUFFER, data.size(), data.data(), GL_STATIC_DRAW);
   for (auto i = 0U; i < num_indices; ++i)
   {
     glEnableVertexAttribArray(i);
@@ -359,7 +395,7 @@ data_desc data_for_expressions_helper(std::string_view path, const std::array<ex
   auto data_vbo = make_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, data_vbo);
   glBufferData(GL_ARRAY_BUFFER, num_points, nullptr, GL_DYNAMIC_DRAW);
-  auto program = program_for_expressions(expressions, indices);
+  auto program = program_for_expressions(data.expressions, r->indices);
   glUseProgram(program);
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, data_vbo);
   glBeginTransformFeedback(GL_POINTS);
@@ -372,17 +408,8 @@ data_desc data_for_expressions_helper(std::string_view path, const std::array<ex
 
 namespace explot
 {
-data_desc data_for_expressions(std::string_view path, const std::array<expr, 2> &expressions)
-{
-  return data_for_expressions_helper(path, expressions);
-}
 
-data_desc data_for_expressions(std::string_view path, const std::array<expr, 3> &expressions)
-{
-  return data_for_expressions_helper(path, expressions);
-}
-
-data_desc data_for_expr(const expr &expr, std::size_t num_points, range_setting xrange)
+data_desc data_for_expression_2d(const expr &expr, std::size_t num_points, range_setting xrange)
 {
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           xrange.lower_bound.value_or(-10.0f));
@@ -407,8 +434,8 @@ data_desc data_for_expr(const expr &expr, std::size_t num_points, range_setting 
   return data_desc(std::move(vbo), num_points);
 }
 
-data_desc parametric_data_for_exprs(const expr &x_expr, const expr &y_expr, std::size_t num_points,
-                                    range_setting trange)
+data_desc data_for_parametric_2d(const expr &x_expr, const expr &y_expr, std::size_t num_points,
+                                 range_setting trange)
 {
   auto min_t = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           trange.lower_bound.value_or(-10.0f));
@@ -449,22 +476,7 @@ data_desc data_for_span(std::span<const glm::vec3> data)
   return {std::move(vbo), static_cast<std::uint32_t>(data.size())};
 }
 
-data_desc data_for_chart_2d(const data_source_2d &src, const plot_command_2d &plot)
-{
-  assert(settings::samples().x > 0);
-  return std::visit(
-      overload([&](const expr &expr)
-               { return data_for_expr(expr, settings::samples().x, plot.x_range); },
-               [](const csv_data_2d &c) { return data_for_expressions(c.path, c.expressions); },
-               [&](const parametric_data_2d &c)
-               {
-                 return parametric_data_for_exprs(c.x_expression, c.y_expression,
-                                                  settings::samples().x, plot.t_range);
-               }),
-      src);
-}
-
-data_desc data_3d_for_expression(const expr &expr, settings::samples_setting isosamples,
+data_desc data_for_expression_3d(const expr &expr, settings::samples_setting isosamples,
                                  settings::samples_setting samples, range_setting xrange,
                                  range_setting yrange)
 {
@@ -571,25 +583,6 @@ data_desc data_for_parametric_3d(const expr &x_expr, const expr &y_expr, const e
   return data_desc(std::move(vbo), num_points, isosamples.x + isosamples.y);
 }
 
-data_desc data_for_chart_3d(const data_source_3d &src, const plot_command_3d &plot)
-{
-  return std::visit(
-      overload(
-          [&](const expr &expr)
-          {
-            return data_3d_for_expression(expr, settings::isosamples(), settings::samples(),
-                                          plot.x_range, plot.y_range);
-          },
-          [](const csv_data_3d &c) { return data_for_expressions(c.path, c.expressions); },
-          [&](const parametric_data_3d &d)
-          {
-            return data_for_parametric_3d(d.x_expression, d.y_expression, d.z_expression,
-                                          settings::isosamples(), settings::samples(), plot.u_range,
-                                          plot.v_range);
-          }),
-      src);
-}
-
 data_desc::data_desc(vbo_handle vbo, std::uint32_t num_points, std::uint32_t num_segments)
     : vbo(std::move(vbo)), num_points(num_points), num_segments(num_segments)
 {
@@ -611,6 +604,59 @@ void print_data(const data_desc &data)
     fmt::print("\n");
   }
   glUnmapBuffer(GL_ARRAY_BUFFER);
+}
+
+std::vector<data_desc> data_for_plot(const plot_command_2d &plot)
+{
+  auto row_data = row_data_for_graphs_2d(plot.graphs);
+  auto result = std::vector<data_desc>();
+  result.reserve(plot.graphs.size());
+  std::ranges::copy(
+      std::ranges::views::transform(
+          plot.graphs,
+          [&](const graph_desc_2d &g)
+          {
+            return std::visit(
+                overload(
+                    [&](const expr &expr)
+                    { return data_for_expression_2d(expr, settings::samples().x, plot.x_range); },
+                    [&](const csv_data_2d &c) { return data_for_csv(c, row_data); },
+                    [&](const parametric_data_2d &c)
+                    {
+                      return data_for_parametric_2d(c.x_expression, c.y_expression,
+                                                    settings::samples().x, plot.t_range);
+                    }),
+                g.data);
+          }),
+      std::back_inserter(result));
+  return result;
+}
+
+std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
+{
+  auto row_data = row_data_for_graphs_2d(plot.graphs);
+  auto result = std::vector<data_desc>();
+  result.reserve(plot.graphs.size());
+  std::ranges::copy(
+      std::ranges::views::transform(
+          plot.graphs,
+          [&](const graph_desc_3d &g)
+          {
+            return std::visit(
+                overload(
+                    [&](const expr &expr)
+                    { return data_for_expression_2d(expr, settings::samples().x, plot.x_range); },
+                    [&](const csv_data_3d &c) { return data_for_csv(c, row_data); },
+                    [&](const parametric_data_3d &c)
+                    {
+                      return data_for_parametric_3d(c.x_expression, c.y_expression, c.z_expression,
+                                                    settings::isosamples(), settings::samples(),
+                                                    plot.u_range, plot.v_range);
+                    }),
+                g.data);
+          }),
+      std::back_inserter(result));
+  return result;
 }
 
 } // namespace explot

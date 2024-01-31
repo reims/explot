@@ -18,20 +18,14 @@ plot2d make_plot2d(const plot_command_2d &cmd)
 {
   auto graphs = make_unique_span<graph2d>(cmd.graphs.size());
   auto lts = resolve_line_types(cmd.graphs);
+  auto data = data_for_plot(cmd);
   auto bounding = std::optional<rect>();
   for (std::size_t i = 0; i < cmd.graphs.size(); ++i)
   {
     const auto &g = cmd.graphs[i];
-    graphs[i] = graph2d(data_for_chart_2d(g.data, cmd), g.mark, lts[i]);
+    graphs[i] = graph2d(std::move(data[i]), g.mark, lts[i]);
     auto br = bounding_rect(graphs[i]);
-    if (bounding)
-    {
-      bounding = union_rect(bounding.value(), br);
-    }
-    else
-    {
-      bounding = br;
-    }
+    bounding = union_rect(bounding.value_or(br), br);
   }
 
   return plot2d{bounding.value_or(clip_rect), std::move(graphs), legend(cmd.graphs, lts)};

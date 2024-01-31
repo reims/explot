@@ -10,15 +10,15 @@
 namespace
 {
 using namespace explot;
-auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lts)
+auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lts,
+                      std::vector<data_desc> &&data)
 {
   const auto &descs = plot.graphs;
   auto result = make_unique_span<graph3d>(descs.size());
 
   for (auto i = 0U; i < descs.size(); ++i)
   {
-    auto data = data_for_chart_3d(descs[i].data, plot);
-    result[i] = graph3d(std::move(data), descs[i].mark, lts[i]);
+    result[i] = graph3d(std::move(data[i]), descs[i].mark, lts[i]);
   }
 
   return result;
@@ -45,8 +45,8 @@ auto bounding_rect_for_graphs(std::span<const graph3d> graphs)
 namespace explot
 {
 plot3d::plot3d(const plot_command_3d &cmd, std::span<const line_type> lts)
-    : graphs(graphs_for_descs(cmd, lts)), phase_space(bounding_rect_for_graphs(graphs)),
-      cs(phase_space, 7), legend(cmd.graphs, lts)
+    : graphs(graphs_for_descs(cmd, lts, data_for_plot(cmd))),
+      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7), legend(cmd.graphs, lts)
 {
 }
 
