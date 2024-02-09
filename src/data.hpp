@@ -21,7 +21,7 @@ struct data_desc final
 
 std::vector<data_desc> data_for_plot(const plot_command_2d &plot);
 std::vector<data_desc> data_for_plot(const plot_command_3d &plot);
-data_desc data_for_span(std::span<const float> data);
+data_desc data_for_span(std::span<const float> data, size_t stride);
 data_desc data_for_span(std::span<const glm::vec3> data);
 
 void print_data(const data_desc &data);

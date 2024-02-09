@@ -17,6 +17,19 @@ program_handle make_program_with_varying(const char *shader_src, const char *var
   return program;
 }
 
+program_handle make_program_with_varying(const char *shader_src, std::span<const char *> varyings)
+{
+  auto shader = glCreateShader(GL_VERTEX_SHADER);
+  glShaderSource(shader, 1, &shader_src, nullptr);
+  glCompileShader(shader);
+  auto program = make_program();
+  glAttachShader(program, shader);
+  glTransformFeedbackVaryings(program, varyings.size(), varyings.data(), GL_INTERLEAVED_ATTRIBS);
+  glLinkProgram(program);
+  glDeleteShader(shader);
+  return program;
+}
+
 program_handle make_program(const char *geometry_shader_src, const char *vertex_shader_src,
                             const char *fragment_shader_src)
 {

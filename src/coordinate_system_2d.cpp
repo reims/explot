@@ -10,8 +10,7 @@ namespace
 {
 auto data_for_axes(glm::vec3 min, glm::vec3 max)
 {
-  auto data = std::array<float, 12>{min.x, min.y, 0.0f, max.x, min.y, 0.0f,
-                                    min.x, min.y, 0.0f, min.x, max.y, 0.0f};
+  auto data = std::array<float, 12>{min.x, min.y, max.x, min.y, min.x, min.y, min.x, max.y};
   return data;
 }
 
@@ -106,7 +105,7 @@ namespace explot
 coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int num_ticks)
 {
   auto d = data_for_axes(bounding_rect.lower_bounds, bounding_rect.upper_bounds);
-  auto data = data_for_span(d);
+  auto data = data_for_span(d, 2);
   auto axis = make_lines_state_2d(data);
   const auto steps =
       (bounding_rect.upper_bounds - bounding_rect.lower_bounds) / static_cast<float>(num_ticks - 1);

@@ -7,9 +7,8 @@ namespace explot
 {
 drag_render_state make_drag_render_state()
 {
-  float data[] = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f,
-                  0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-  auto d = data_for_span(data);
+  float data[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+  auto d = data_for_span(data, 2);
   return drag_render_state{.lines = make_line_strip_state_2d(d), .data = std::move(d)};
 }
 

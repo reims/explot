@@ -12,33 +12,13 @@
 
 namespace
 {
-constexpr auto prepare_shader_x = R"shader(#version 330 core
-layout (location = 0) in vec3 d;
+constexpr auto prepare_shader = R"shader(#version 330 core
+layout (location = 0) in float d;
 out vec2 v;
 
 void  main()
 {
-  v = vec2(d.x, d.x);
-}
-)shader";
-
-constexpr auto prepare_shader_y = R"shader(#version 330 core
-layout (location = 0) in vec3 d;
-out vec2 v;
-
-void  main()
-{
-  v = vec2(d.y, d.y);
-}
-)shader";
-
-constexpr auto prepare_shader_z = R"shader(#version 330 core
-layout (location = 0) in vec3 d;
-out vec2 v;
-
-void  main()
-{
-  v = vec2(d.z, d.z);
+  v = vec2(d, d);
 }
 )shader";
 
@@ -93,9 +73,9 @@ explot::program_handle program_for_shader(const char *shader_src)
   return explot::make_program_with_varying(shader_src, "v");
 }
 
-explot::vbo_handle prepare(const explot::data_desc &d, const char *shader_src)
+explot::vbo_handle prepare(const explot::data_desc &d, size_t stride, size_t offset)
 {
-  auto program = program_for_shader(shader_src);
+  auto program = program_for_shader(prepare_shader);
   auto vao = explot::make_vao();
   glBindVertexArray(vao);
   auto vbo = explot::make_vbo();
@@ -107,7 +87,8 @@ explot::vbo_handle prepare(const explot::data_desc &d, const char *shader_src)
                     2 * static_cast<std::size_t>(d.num_points) * sizeof(float));
   glUseProgram(program);
   glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  glVertexAttribPointer(0, 1, GL_FLOAT, GL_FALSE, stride * sizeof(float),
+                        (void *)(offset * sizeof(float)));
   glEnableVertexAttribArray(0);
   glBeginTransformFeedback(GL_POINTS);
   glDrawArrays(GL_POINTS, 0, d.num_points);
@@ -116,9 +97,9 @@ explot::vbo_handle prepare(const explot::data_desc &d, const char *shader_src)
   return vbo;
 }
 
-glm::vec2 minmax(const explot::data_desc &d, const char *shader_src)
+glm::vec2 minmax(const explot::data_desc &d, size_t stride, size_t offset)
 {
-  auto vbo1 = prepare(d, shader_src);
+  auto vbo1 = prepare(d, stride, offset);
   auto vbo2 = explot::make_vbo();
   auto vao = explot::make_vao();
   glBindVertexArray(vao);
@@ -146,21 +127,21 @@ glm::vec2 minmax(const explot::data_desc &d, const char *shader_src)
 
 namespace explot
 {
-glm::vec2 minmax_x(const data_desc &d) { return minmax(d, prepare_shader_x); }
+glm::vec2 minmax_x(const data_desc &d, size_t stride) { return minmax(d, stride, 0); }
 
-glm::vec2 minmax_y(const data_desc &d) { return minmax(d, prepare_shader_y); }
+glm::vec2 minmax_y(const data_desc &d, size_t stride) { return minmax(d, stride, 1); }
 
-glm::vec2 minmax_z(const data_desc &d) { return minmax(d, prepare_shader_z); }
+glm::vec2 minmax_z(const data_desc &d, size_t stride) { return minmax(d, stride, 2); }
 
-rect bounding_rect_2d(const data_desc &d)
+rect bounding_rect_2d(const data_desc &d, size_t stride)
 {
-  auto bx = minmax_x(d);
+  auto bx = minmax_x(d, stride);
   if (bx.y - bx.x < 1e-8)
   {
     bx.x -= 1.0f;
     bx.y += 1.0f;
   }
-  auto by = minmax_y(d);
+  auto by = minmax_y(d, stride);
   if (by.y - by.x < 1e-8)
   {
     by.x -= 1.0f;
@@ -171,21 +152,21 @@ rect bounding_rect_2d(const data_desc &d)
               .upper_bounds = glm::vec3(bx.y, by.y, 1.0f)};
 }
 
-rect bounding_rect_3d(const data_desc &d)
+rect bounding_rect_3d(const data_desc &d, size_t stride)
 {
-  auto bx = minmax_x(d);
+  auto bx = minmax_x(d, stride);
   if (bx.y - bx.x < 1e-8)
   {
     bx.x -= 1.0f;
     bx.y += 1.0f;
   }
-  auto by = minmax_y(d);
+  auto by = minmax_y(d, stride);
   if (by.y - by.x < 1e-8)
   {
     by.x -= 1.0f;
     by.y += 1.0f;
   }
-  auto bz = minmax_z(d);
+  auto bz = minmax_z(d, stride);
   if (bz.y - bz.x < 1e-8)
   {
     bz.x -= 1.0f;

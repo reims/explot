@@ -31,7 +31,7 @@ void draw(const graph2d &graph, const glm::mat4 &view_to_screen, const glm::mat4
       graph.graph);
 }
 
-rect bounding_rect(const graph2d &graph) { return bounding_rect_2d(graph.data); }
-glm::vec2 minmax_x(const graph2d &graph) { return explot::minmax_x(graph.data); }
-glm::vec2 minmax_y(const graph2d &graph) { return explot::minmax_y(graph.data); }
+rect bounding_rect(const graph2d &graph) { return bounding_rect_2d(graph.data, 2); }
+glm::vec2 minmax_x(const graph2d &graph) { return explot::minmax_x(graph.data, 2); }
+glm::vec2 minmax_y(const graph2d &graph) { return explot::minmax_y(graph.data, 2); }
 } // namespace explot

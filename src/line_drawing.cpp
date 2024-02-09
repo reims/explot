@@ -12,13 +12,13 @@ namespace
 using namespace explot;
 
 constexpr auto vertex_shader_src_2d = R"shader(#version 330 core
-layout (location = 0) in vec3 position;
+layout (location = 0) in vec2 position;
 
 uniform mat4 phase_to_screen;
 
 void main()
 {
-  gl_Position = phase_to_screen * vec4(position, 1);
+  gl_Position = phase_to_screen * vec4(position, 0, 1);
 }
 )shader";
 
@@ -253,7 +253,7 @@ line_strip_state_2d make_line_strip_state_2d(const data_desc &data)
   glBindVertexArray(state.vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
 
   state.num_points_per_segment = data.num_points / data.num_segments;
@@ -287,7 +287,7 @@ lines_state_2d make_lines_state_2d(const data_desc &d)
   state.num_points = d.num_points;
   glBindVertexArray(state.vao);
   glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   return state;
 }

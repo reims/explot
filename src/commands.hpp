@@ -3,7 +3,6 @@
 #include <variant>
 #include <string>
 #include <vector>
-#include <array>
 #include "range_setting.hpp"
 #include "box.hpp"
 
@@ -67,10 +66,10 @@ struct line_type_spec
 
 using line_type_desc = std::variant<line_type_spec, int>;
 
-struct csv_data_2d final
+struct csv_data final
 {
   std::string path;
-  std::array<expr, 2> expressions;
+  std::vector<expr> expressions;
 };
 
 struct parametric_data_2d final
@@ -85,7 +84,7 @@ enum struct mark_type
   lines
 };
 
-using data_source_2d = std::variant<expr, csv_data_2d, parametric_data_2d>;
+using data_source_2d = std::variant<expr, csv_data, parametric_data_2d>;
 
 struct graph_desc_2d final
 {
@@ -103,12 +102,6 @@ struct plot_command_2d final
   range_setting t_range;
 };
 
-struct csv_data_3d
-{
-  std::string path;
-  std::array<expr, 3> expressions;
-};
-
 struct parametric_data_3d final
 {
   expr x_expression;
@@ -116,7 +109,7 @@ struct parametric_data_3d final
   expr z_expression;
 };
 
-using data_source_3d = std::variant<expr, csv_data_3d, parametric_data_3d>;
+using data_source_3d = std::variant<expr, csv_data, parametric_data_3d>;
 
 struct graph_desc_3d final
 {

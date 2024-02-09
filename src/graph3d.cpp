@@ -26,7 +26,7 @@ graph3d::graph3d(data_desc data, mark_type mark, line_type lt)
 {
 }
 
-rect bounding_rect(const graph3d &graph) { return bounding_rect_3d(graph.data); }
+rect bounding_rect(const graph3d &graph) { return bounding_rect_3d(graph.data, 3); }
 
 void draw(const graph3d &graph, const glm::mat4 &phase_to_view, const glm::mat4 &view_to_clip,
           const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip)

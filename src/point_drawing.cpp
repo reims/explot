@@ -6,13 +6,13 @@ namespace
 {
 using namespace explot;
 constexpr auto vertex_2d_shader_src = R"shader(#version 330 core
-layout (location = 0) in vec3 position;
+layout (location = 0) in vec2 position;
 
 uniform mat4 phase_to_screen;
 
 void main()
 {
-  gl_Position = floor(phase_to_screen * vec4(position, 1)) + vec4(0.5, 0.5, 0.0, 0.0);
+  gl_Position = floor(phase_to_screen * vec4(position, 0, 1)) + vec4(0.5, 0.5, 0.0, 0.0);
 }
 )shader";
 
@@ -128,7 +128,7 @@ points_2d_state::points_2d_state(const data_desc &data)
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
 }
 

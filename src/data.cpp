@@ -47,8 +47,10 @@ std::string to_glsl(const expr &e, std::span<const int> indices = {})
       {
         return "gl_VertexID";
       }
-      auto idx = std::distance(std::begin(indices), std::ranges::find(indices, d.idx));
-      return fmt::format("row[{}]", idx);
+      const auto idx = std::ranges::find(indices, d.idx);
+      const auto pos = std::distance(indices.begin(), idx);
+      assert(idx != indices.end());
+      return fmt::format("row[{}]", pos);
     }
     std::string operator()(const box<unary_op> &op) const
     {
@@ -77,20 +79,60 @@ std::string to_glsl(const expr &e, std::span<const int> indices = {})
   return std::visit(visitor{indices}, e);
 }
 
-program_handle program_for_functional_data(const expr &e)
+program_handle program_for_using_expressions(std::span<const expr> exprs,
+                                             std::span<const int> indices)
+{
+  static constexpr char shader_source_fmt[] = R"(#version 330 core
+layout(location = 0) in float row[{}];
+
+{}
+
+void main()
+{{
+{}
+}}
+)";
+
+  // Not the most efficient code. But exprs.size() < 10, so it should be ok
+
+  auto assignments_str = std::string();
+  auto varyings_str = std::string();
+  auto varyings_ids = std::vector<std::string>();
+  varyings_ids.reserve(exprs.size());
+  auto varyings_ptrs = std::vector<const char *>();
+  varyings_ptrs.reserve(exprs.size());
+
+  for (auto i = 0u; i < exprs.size(); ++i)
+  {
+    fmt::format_to(std::back_inserter(varyings_str), "out float v{};\n", i);
+    fmt::format_to(std::back_inserter(assignments_str), "v{} = {};\n", i,
+                   to_glsl(exprs[i], indices));
+
+    varyings_ids.push_back(fmt::format("v{}", i));
+    varyings_ptrs.push_back(varyings_ids.back().c_str());
+  }
+
+  auto shader_src = fmt::format(shader_source_fmt, indices.size(), varyings_str, assignments_str);
+
+  auto program = make_program_with_varying(shader_src.c_str(), varyings_ptrs);
+
+  return program;
+}
+
+program_handle program_for_functional_data_2d(const expr &e)
 {
   static constexpr auto shader_source_fmt = R"(#version 330 core
 
 uniform float min_x;
 uniform float step_x;
 
-out vec3 v;
+out vec2 v;
 
 void  main()
 {{
   float x = min_x + step_x * gl_InstanceID;
   float value = {};
-  v = vec3(x, value, 0.0);
+  v = vec2(x, value);
 }}
 )";
   auto glsl = to_glsl(e);
@@ -105,14 +147,14 @@ program_handle program_for_parametric_data_2d(const expr &x_expr, const expr &y_
 uniform float min_t;
 uniform float step_t;
 
-out vec3 v;
+out vec2 v;
 
 void  main()
 {{
   float t = mint_t + step_t * gl_InstanceID;
   float x_value = {};
   float y_value = {};
-  v = vec3(x_value, y_value, 0.0);
+  v = vec2(x_value, y_value);
 }}
 )";
   auto x_glsl = to_glsl(x_expr);
@@ -274,57 +316,6 @@ std::vector<int> extract_indices(std::span<const expr> expressions)
   return indices;
 }
 
-static constexpr const char *shader_for_2_expressions = R"shader(#version 330 core
-
-layout(location = 0) in float row[{}];
-
-out vec3 v;
-
-void  main()
-{{
-  float x = {};
-  float y = {};
-  v = vec3(x, y, 0.0);
-}}
-)shader";
-
-program_handle program_for_expressions(const std::array<expr, 2> &expressions,
-                                       std::span<const int> indices)
-{
-  auto x_expression = to_glsl(expressions[0], indices);
-  auto y_expression = to_glsl(expressions[1], indices);
-  auto shader_str =
-      fmt::format(shader_for_2_expressions, indices.size(), x_expression, y_expression);
-  auto shader_src = shader_str.c_str();
-  return make_program_with_varying(shader_str.c_str(), "v");
-}
-
-static constexpr const char *shader_for_3_expressions = R"shader(#version 330 core
-
-layout(location = 0) in float row[{}];
-
-out vec3 v;
-
-void  main()
-{{
-  float x = {};
-  float y = {};
-  float z = {};
-  v = vec3(x, y, z);
-}}
-)shader";
-
-program_handle program_for_expressions(const std::array<expr, 3> &expressions,
-                                       std::span<const int> indices)
-{
-  auto x_expression = to_glsl(expressions[0], indices);
-  auto y_expression = to_glsl(expressions[1], indices);
-  auto z_expression = to_glsl(expressions[2], indices);
-  auto shader_str = fmt::format(shader_for_3_expressions, indices.size(), x_expression,
-                                y_expression, z_expression);
-  return make_program_with_varying(shader_str.c_str(), "v");
-}
-
 struct row_data
 {
   std::string filename;
@@ -373,18 +364,13 @@ std::vector<row_data> row_data_for_graphs_2d(const T &gs)
   return result;
 }
 
-template <typename T>
-data_desc data_for_csv(const T &data, std::span<const row_data> row_data)
+data_desc data_for_using_expressions(std::span<const expr> exprs, const row_data &r)
 {
-  // why is the struct keyword necessary in the lambda
-  auto r = std::ranges::find_if(row_data,
-                                [&](const struct row_data &d) { return d.filename == data.path; });
-  assert(r != row_data.end());
-  const auto num_indices = r->indices.size();
-  const auto num_points = r->data.num_points;
+  const auto num_indices = r.indices.size();
+  const auto num_points = r.data.num_points;
   auto vao = make_vao();
   glBindVertexArray(vao);
-  auto &csv_vbo = r->data.vbo;
+  auto &csv_vbo = r.data.vbo;
   glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
   for (auto i = 0U; i < num_indices; ++i)
   {
@@ -394,8 +380,9 @@ data_desc data_for_csv(const T &data, std::span<const row_data> row_data)
   }
   auto data_vbo = make_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, data_vbo);
-  glBufferData(GL_ARRAY_BUFFER, num_points, nullptr, GL_DYNAMIC_DRAW);
-  auto program = program_for_expressions(data.expressions, r->indices);
+  glBufferData(GL_ARRAY_BUFFER, exprs.size() * num_points * sizeof(float), nullptr,
+               GL_DYNAMIC_DRAW);
+  auto program = program_for_using_expressions(exprs, r.indices);
   glUseProgram(program);
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, data_vbo);
   glBeginTransformFeedback(GL_POINTS);
@@ -403,11 +390,6 @@ data_desc data_for_csv(const T &data, std::span<const row_data> row_data)
   glEndTransformFeedback();
   return data_desc(std::move(data_vbo), num_points);
 }
-
-} // namespace
-
-namespace explot
-{
 
 data_desc data_for_expression_2d(const expr &expr, std::size_t num_points, range_setting xrange)
 {
@@ -417,11 +399,11 @@ data_desc data_for_expression_2d(const expr &expr, std::size_t num_points, range
                           xrange.upper_bound.value_or(10.0f));
   const auto step_x = (max_x - min_x) / (num_points - 1);
   auto vao = make_vao();
-  auto program = program_for_functional_data(expr);
+  auto program = program_for_functional_data_2d(expr);
   auto vbo = make_vbo();
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, 3 * num_points * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, 2 * num_points * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
   glUseProgram(program);
   glUniform1f(glGetUniformLocation(program, "min_x"), min_x);
   glUniform1f(glGetUniformLocation(program, "step_x"), step_x);
@@ -447,7 +429,7 @@ data_desc data_for_parametric_2d(const expr &x_expr, const expr &y_expr, std::si
   auto vbo = make_vbo();
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, 3 * num_points * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, 2 * num_points * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
   glUseProgram(program);
   glUniform1f(glGetUniformLocation(program, "min_t"), min_t);
   glUniform1f(glGetUniformLocation(program, "step_t"), step_t);
@@ -458,22 +440,6 @@ data_desc data_for_parametric_2d(const expr &x_expr, const expr &y_expr, std::si
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
 
   return data_desc(std::move(vbo), num_points);
-}
-
-data_desc data_for_span(std::span<const float> data)
-{
-  auto vbo = make_vbo();
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(float) * data.size(), data.data(), GL_DYNAMIC_DRAW);
-  return {std::move(vbo), static_cast<std::uint32_t>(data.size() / 3)};
-}
-
-data_desc data_for_span(std::span<const glm::vec3> data)
-{
-  auto vbo = make_vbo();
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * data.size(), data.data(), GL_DYNAMIC_DRAW);
-  return {std::move(vbo), static_cast<std::uint32_t>(data.size())};
 }
 
 data_desc data_for_expression_3d(const expr &expr, settings::samples_setting isosamples,
@@ -583,6 +549,28 @@ data_desc data_for_parametric_3d(const expr &x_expr, const expr &y_expr, const e
   return data_desc(std::move(vbo), num_points, isosamples.x + isosamples.y);
 }
 
+} // namespace
+
+namespace explot
+{
+
+data_desc data_for_span(std::span<const float> data, size_t stride)
+{
+  assert(data.size() % stride == 0);
+  auto vbo = make_vbo();
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(float) * data.size(), data.data(), GL_DYNAMIC_DRAW);
+  return {std::move(vbo), static_cast<std::uint32_t>(data.size() / stride)};
+}
+
+data_desc data_for_span(std::span<const glm::vec3> data)
+{
+  auto vbo = make_vbo();
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * data.size(), data.data(), GL_DYNAMIC_DRAW);
+  return {std::move(vbo), static_cast<std::uint32_t>(data.size())};
+}
+
 data_desc::data_desc(vbo_handle vbo, std::uint32_t num_points, std::uint32_t num_segments)
     : vbo(std::move(vbo)), num_points(num_points), num_segments(num_segments)
 {
@@ -620,7 +608,13 @@ std::vector<data_desc> data_for_plot(const plot_command_2d &plot)
                 overload(
                     [&](const expr &expr)
                     { return data_for_expression_2d(expr, settings::samples().x, plot.x_range); },
-                    [&](const csv_data_2d &c) { return data_for_csv(c, row_data); },
+                    [&](const csv_data &c)
+                    {
+                      return data_for_using_expressions(
+                          c.expressions,
+                          *std::ranges::find_if(row_data, [&](const struct row_data &r)
+                                                { return r.filename == c.path; }));
+                    },
                     [&](const parametric_data_2d &c)
                     {
                       return data_for_parametric_2d(c.x_expression, c.y_expression,
@@ -645,8 +639,18 @@ std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
             return std::visit(
                 overload(
                     [&](const expr &expr)
-                    { return data_for_expression_2d(expr, settings::samples().x, plot.x_range); },
-                    [&](const csv_data_3d &c) { return data_for_csv(c, row_data); },
+                    {
+                      return data_for_expression_3d(expr, settings::isosamples(),
+                                                    settings::samples(), plot.x_range,
+                                                    plot.y_range);
+                    },
+                    [&](const csv_data &c)
+                    {
+                      return data_for_using_expressions(
+                          c.expressions,
+                          *std::ranges::find_if(row_data, [&](const struct row_data &r)
+                                                { return r.filename == c.path; }));
+                    },
                     [&](const parametric_data_3d &c)
                     {
                       return data_for_parametric_3d(c.x_expression, c.y_expression, c.z_expression,

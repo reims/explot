@@ -401,22 +401,22 @@ struct title
   static constexpr auto value = lexy::forward<std::string>;
 };
 
+struct csv_data_
+{
+  static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
+  static constexpr auto value = lexy::callback<csv_data>(
+      [](std::string path, std::vector<expr> exprs) {
+        return csv_data{std::move(path), std::move(exprs)};
+      });
+};
+
 struct plot
 {
   static constexpr auto whitespace = dsl::ascii::space;
 
-  struct csv_data
-  {
-    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
-    static constexpr auto value = lexy::callback<csv_data_2d>(
-        [](std::string path, const std::vector<expr> exprs) {
-          return csv_data_2d{std::move(path), {exprs[0], exprs[1]}};
-        });
-  };
-
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
                                  | dsl::peek_not(str_delim) >> dsl::p<expr_>;
     static constexpr auto value = lexy::construct<data_source_2d>;
   };
@@ -489,21 +489,12 @@ struct parametric_plot
 
   using data_ast = std::variant<std::string, std::pair<expr, expr>>;
 
-  struct csv_data
-  {
-    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
-    static constexpr auto value = lexy::callback<csv_data_2d>(
-        [](std::string path, const std::vector<expr> exprs) {
-          return csv_data_2d{std::move(path), {exprs[0], exprs[1]}};
-        });
-  };
-
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
                                  | dsl::peek_not(str_delim)
                                        >> dsl::twice(dsl::p<expr_>, dsl::sep(dsl::comma));
-    static constexpr auto value = lexy::callback<data_source_2d>(lexy::forward<csv_data_2d>,
+    static constexpr auto value = lexy::callback<data_source_2d>(lexy::forward<csv_data>,
                                                                  [](expr x, expr y) {
                                                                    return parametric_data_2d{x, y};
                                                                  });
@@ -579,18 +570,9 @@ struct splot
 {
   static constexpr auto whitespace = dsl::ascii::space;
 
-  struct csv_data
-  {
-    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
-    static constexpr auto value = lexy::callback<csv_data_3d>(
-        [](std::string path, const std::vector<expr> exprs) {
-          return csv_data_3d{std::move(path), {exprs[0], exprs[1], exprs[2]}};
-        });
-  };
-
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
                                  | dsl::peek_not(str_delim) >> dsl::p<expr_>;
     static constexpr auto value = lexy::construct<data_source_3d>;
   };
@@ -661,22 +643,13 @@ struct parametric_splot
 {
   static constexpr auto whitespace = dsl::ascii::space;
 
-  struct csv_data
-  {
-    static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
-    static constexpr auto value = lexy::callback<csv_data_3d>(
-        [](std::string path, const std::vector<expr> exprs) {
-          return csv_data_3d{std::move(path), {exprs[0], exprs[1], exprs[2]}};
-        });
-  };
-
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data>
+    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
                                  | dsl::peek_not(str_delim)
                                        >> dsl::times<3>(dsl::p<expr_>, dsl::sep(dsl::lit_c<','>));
     static constexpr auto value =
-        lexy::callback<data_source_3d>(lexy::forward<csv_data_3d>,
+        lexy::callback<data_source_3d>(lexy::forward<csv_data>,
                                        [](expr x, expr y, expr z) {
                                          return parametric_data_3d{x, y, z};
                                        });

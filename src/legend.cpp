@@ -39,14 +39,14 @@ std::string glyphs_for_graphs(std::span<const graph_desc_3d> graphs)
 
 data_desc make_point_data()
 {
-  static constexpr float coord[] = {0.0f, 0.0f, 0.0f};
-  return data_for_span(coord);
+  static constexpr float coord[] = {0.0f, 0.0f};
+  return data_for_span(coord, 2);
 }
 
 data_desc make_line_data()
 {
-  static constexpr float coords[] = {-0.8f, 0.0f, 0.0f, 0.8f, 0.0f, 0.0f};
-  return data_for_span(coords);
+  static constexpr float coords[] = {-0.8f, 0.0f, 0.8f, 0.0f};
+  return data_for_span(coords, 2);
 }
 
 } // namespace
