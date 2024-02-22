@@ -55,19 +55,19 @@ namespace explot
 {
 
 legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs)).value()), point_data(make_point_data()),
-      line_data(make_line_data())
+    : font(make_font_atlas(glyphs_for_graphs(graphs)).value())
 {
   int i = 0;
   for (const auto &g : graphs)
   {
     switch (g.mark)
     {
-    case mark_type::points:
-      marks.push_back(points_2d_state(point_data));
+    case mark_type_2d::points:
+      marks.push_back(points_2d_state(make_point_data()));
       break;
-    case mark_type::lines:
-      marks.push_back(make_lines_state_2d(line_data));
+    case mark_type_2d::impulses:
+    case mark_type_2d::lines:
+      marks.push_back(make_lines_state_2d(make_line_data()));
       break;
     }
     titles.push_back(make_gl_string(font, g.title));
@@ -76,8 +76,7 @@ legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type>
 }
 
 legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs)).value()), point_data(make_point_data()),
-      line_data(make_line_data())
+    : font(make_font_atlas(glyphs_for_graphs(graphs)).value())
 {
   int i = 0;
   titles.reserve(graphs.size());
@@ -86,11 +85,11 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
   {
     switch (g.mark)
     {
-    case mark_type::points:
-      marks.push_back(points_2d_state(point_data));
+    case mark_type_3d::points:
+      marks.push_back(points_2d_state(make_point_data()));
       break;
-    case mark_type::lines:
-      marks.push_back(make_lines_state_2d(line_data));
+    case mark_type_3d::lines:
+      marks.push_back(make_lines_state_2d(make_line_data()));
       break;
     }
     titles.push_back(make_gl_string(font, g.title));

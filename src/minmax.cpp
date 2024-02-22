@@ -75,23 +75,25 @@ explot::program_handle program_for_shader(const char *shader_src)
 
 explot::vbo_handle prepare(const explot::data_desc &d, size_t stride, size_t offset)
 {
+  assert(d.point_size % stride == 0);
+  auto num_points = d.num_points * (d.point_size / stride);
   auto program = program_for_shader(prepare_shader);
   auto vao = explot::make_vao();
   glBindVertexArray(vao);
   auto vbo = explot::make_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, 2 * static_cast<std::size_t>(d.num_points) * sizeof(float), nullptr,
+  glBufferData(GL_ARRAY_BUFFER, 2 * static_cast<std::size_t>(num_points) * sizeof(float), nullptr,
                GL_DYNAMIC_DRAW);
-  assert(d.num_points > 0);
+  assert(num_points > 0);
   glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo, 0,
-                    2 * static_cast<std::size_t>(d.num_points) * sizeof(float));
+                    2 * static_cast<std::size_t>(num_points) * sizeof(float));
   glUseProgram(program);
   glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
   glVertexAttribPointer(0, 1, GL_FLOAT, GL_FALSE, stride * sizeof(float),
                         (void *)(offset * sizeof(float)));
   glEnableVertexAttribArray(0);
   glBeginTransformFeedback(GL_POINTS);
-  glDrawArrays(GL_POINTS, 0, d.num_points);
+  glDrawArrays(GL_POINTS, 0, num_points);
   glEndTransformFeedback();
   glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
   return vbo;
@@ -99,14 +101,19 @@ explot::vbo_handle prepare(const explot::data_desc &d, size_t stride, size_t off
 
 glm::vec2 minmax(const explot::data_desc &d, size_t stride, size_t offset)
 {
+  if (d.num_points == 0)
+  {
+    return glm::vec2(-1.0f, 1.0f);
+  }
+  assert(d.point_size % stride == 0);
+  auto num_points = d.num_points * (d.point_size / stride);
   auto vbo1 = prepare(d, stride, offset);
   auto vbo2 = explot::make_vbo();
   auto vao = explot::make_vao();
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo2);
-  glBufferData(GL_ARRAY_BUFFER, static_cast<std::size_t>(d.num_points) * sizeof(float), nullptr,
+  glBufferData(GL_ARRAY_BUFFER, static_cast<std::size_t>(num_points) * sizeof(float), nullptr,
                GL_DYNAMIC_DRAW);
-  auto num_points = d.num_points;
   auto program = program_for_shader(step_shader);
   glUseProgram(program);
   while (num_points > 1)

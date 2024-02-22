@@ -7,6 +7,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <cassert>
 #include "colors.hpp"
+#include "minmax.hpp"
 
 namespace
 {
@@ -23,8 +24,8 @@ plot2d make_plot2d(const plot_command_2d &cmd)
   for (std::size_t i = 0; i < cmd.graphs.size(); ++i)
   {
     const auto &g = cmd.graphs[i];
+    auto br = bounding_rect_2d(data[i], 2);
     graphs[i] = graph2d(std::move(data[i]), g.mark, lts[i]);
-    auto br = bounding_rect(graphs[i]);
     bounding = union_rect(bounding.value_or(br), br);
   }
 

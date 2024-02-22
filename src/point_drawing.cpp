@@ -123,8 +123,8 @@ program_handle make_points_3d_program() { return make_points_program(vertex_3d_s
 
 namespace explot
 {
-points_2d_state::points_2d_state(const data_desc &data)
-    : vao(make_vao()), program(make_points_2d_program()), num_points(data.num_points)
+points_2d_state::points_2d_state(data_desc d)
+    : vao(make_vao()), program(make_points_2d_program()), data(std::move(d))
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
@@ -142,11 +142,11 @@ void draw(const points_2d_state &state, float line_width, float point_width, con
                    {"phase_to_screen", view_to_screen},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_POINTS, 0, state.num_points);
+  glDrawArrays(GL_POINTS, 0, state.data.num_points);
 }
 
-points_3d_state::points_3d_state(const data_desc &data)
-    : vao(make_vao()), program(make_points_3d_program()), num_points(data.num_points)
+points_3d_state::points_3d_state(data_desc d)
+    : vao(make_vao()), program(make_points_3d_program()), data(std::move(d))
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
@@ -163,7 +163,7 @@ void draw(const points_3d_state &state, float line_width, float point_width, con
                    {"screen_to_clip", screen_to_clip}, {"phase_to_clip", phase_to_clip},
                    {"clip_to_screen", clip_to_screen}, {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_POINTS, 0, state.num_points);
+  glDrawArrays(GL_POINTS, 0, state.data.num_points);
 }
 
 } // namespace explot

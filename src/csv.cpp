@@ -17,7 +17,7 @@ std::vector<float> read_csv(const std::filesystem::path &p, char delim, std::spa
   if (f.is_open())
   {
     char buffer[1 << 10];
-    static constexpr auto max_size = std::extent_v<decltype(buffer)> - 1;
+    static constexpr auto max_size = std::size(buffer) - 1;
     while (!f.eof())
     {
       f.getline(buffer, max_size);
@@ -45,6 +45,22 @@ std::vector<float> read_csv(const std::filesystem::path &p, char delim, std::spa
     }
   }
 
+  return result;
+}
+
+std::uint32_t count_lines(const std::filesystem::path &p)
+{
+  auto result = 0u;
+  auto f = std::ifstream(p);
+  if (f.is_open())
+  {
+    char buffer[1 << 10];
+    static constexpr auto max_size = std::size(buffer) - 1;
+    while (f.getline(buffer, max_size))
+    {
+      ++result;
+    }
+  }
   return result;
 }
 

@@ -20,8 +20,6 @@ struct legend final
   std::vector<gl_string> titles;
   std::vector<mark_state> marks;
   std::vector<glm::vec4> colors;
-  data_desc point_data;
-  data_desc line_data;
 
   legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts);
   legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts);

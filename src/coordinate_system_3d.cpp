@@ -60,7 +60,7 @@ namespace explot
 {
 coordinate_system_3d::coordinate_system_3d(const rect &phase_space, std::uint32_t num_ticks)
     : scale_to_phase(transform(clip_rect, phase_space)),
-      data(data_for_coordinate_system(num_ticks)), lines(make_lines_state_3d(data)),
+      lines(make_lines_state_3d(data_for_coordinate_system(num_ticks))),
       font(make_font_atlas("+-.,0123456789eE").value()), xlabels(num_ticks), ylabels(num_ticks),
       zlabels(num_ticks)
 {

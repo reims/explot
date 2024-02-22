@@ -9,7 +9,7 @@ drag_render_state make_drag_render_state()
 {
   float data[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
   auto d = data_for_span(data, 2);
-  return drag_render_state{.lines = make_line_strip_state_2d(d), .data = std::move(d)};
+  return drag_render_state{.lines = make_line_strip_state_2d(std::move(d))};
 }
 
 void draw(const drag_render_state &s, const rect &d, const glm::mat4 &screen_to_clip, float width)

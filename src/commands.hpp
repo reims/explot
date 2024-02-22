@@ -78,7 +78,14 @@ struct parametric_data_2d final
   expr y_expression;
 };
 
-enum struct mark_type
+enum struct mark_type_2d
+{
+  points,
+  lines,
+  impulses
+};
+
+enum struct mark_type_3d
 {
   points,
   lines
@@ -89,7 +96,7 @@ using data_source_2d = std::variant<expr, csv_data, parametric_data_2d>;
 struct graph_desc_2d final
 {
   data_source_2d data;
-  mark_type mark;
+  mark_type_2d mark;
   std::string title;
   line_type_desc line_type;
 };
@@ -114,7 +121,7 @@ using data_source_3d = std::variant<expr, csv_data, parametric_data_3d>;
 struct graph_desc_3d final
 {
   data_source_3d data;
-  mark_type mark;
+  mark_type_3d mark;
   std::string title;
   line_type_desc line_type;
 };

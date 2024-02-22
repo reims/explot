@@ -6,6 +6,7 @@
 #include "colors.hpp"
 #include <cassert>
 #include "data.hpp"
+#include "minmax.hpp"
 
 namespace
 {
@@ -22,6 +23,12 @@ auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lt
   }
 
   return result;
+}
+
+auto bounding_rect(const graph3d &g)
+{
+  return bounding_rect_3d(
+      std::visit([](const auto &s) -> const data_desc & { return s.data; }, g.graph), 3);
 }
 
 auto bounding_rect_for_graphs(std::span<const graph3d> graphs)

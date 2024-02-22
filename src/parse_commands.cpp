@@ -353,21 +353,46 @@ struct ranges
   static constexpr auto value = lexy::as_list<std::vector<range_setting>>;
 };
 
-struct with
+struct with_2d
 {
   static constexpr auto whitespace = dsl::ascii::space;
-  static constexpr auto rule = dsl::capture(LEXY_LIT("lines")) | dsl::capture(LEXY_LIT("points"));
-  static constexpr auto value = lexy::callback<mark_type>(
+  static constexpr auto rule = dsl::capture(LEXY_LIT("lines")) | dsl::capture(LEXY_LIT("points"))
+                               | dsl::capture(LEXY_LIT("impulses"));
+  static constexpr auto value = lexy::callback<mark_type_2d>(
       [](const auto &s)
       {
         std::string ss(s.begin(), s.end());
         if (ss == "lines")
         {
-          return mark_type::lines;
+          return mark_type_2d::lines;
+        }
+        else if (ss == "points")
+        {
+          return mark_type_2d::points;
         }
         else
         {
-          return mark_type::points;
+          return mark_type_2d::impulses;
+        }
+      });
+};
+
+struct with_3d
+{
+  static constexpr auto whitespace = dsl::ascii::space;
+  static constexpr auto rule = dsl::capture(LEXY_LIT("lines")) | dsl::capture(LEXY_LIT("points"))
+                               | dsl::capture(LEXY_LIT("impulses"));
+  static constexpr auto value = lexy::callback<mark_type_3d>(
+      [](const auto &s)
+      {
+        std::string ss(s.begin(), s.end());
+        if (ss == "lines")
+        {
+          return mark_type_3d::lines;
+        }
+        else // if (ss == "points")
+        {
+          return mark_type_3d::points;
         }
       });
 };
@@ -428,11 +453,11 @@ struct plot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with_2d>,
                                    LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
                                    LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type_or_ref>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_2d>(
-          [] { return graph_desc_2d{}; }, [](graph_desc_2d &g, mark_type m) { g.mark = m; },
+          [] { return graph_desc_2d{}; }, [](graph_desc_2d &g, mark_type_2d m) { g.mark = m; },
           [](graph_desc_2d &g, std::string title) { g.title = std::move(title); },
           [](graph_desc_2d &g, const line_type_desc &lt) { g.line_type = lt; });
     };
@@ -507,11 +532,11 @@ struct parametric_plot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with_2d>,
                                    LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
                                    LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type_or_ref>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_2d>(
-          [] { return graph_desc_2d{}; }, [](auto &g, mark_type m) { g.mark = m; },
+          [] { return graph_desc_2d{}; }, [](auto &g, mark_type_2d m) { g.mark = m; },
           [](auto &g, std::string title) { g.title = std::move(title); },
           [](graph_desc_2d &g, const line_type_desc &lt) { g.line_type = lt; });
     };
@@ -584,11 +609,11 @@ struct splot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with_3d>,
                                    LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
                                    LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type_or_ref>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_3d>(
-          [] { return graph_desc_3d{}; }, [](auto &g, mark_type m) { g.mark = m; },
+          [] { return graph_desc_3d{}; }, [](auto &g, mark_type_3d m) { g.mark = m; },
           [](auto &g, std::string title) { g.title = std::move(title); },
           [](graph_desc_3d &g, const line_type_desc &lt) { g.line_type = lt; });
     };
@@ -662,11 +687,11 @@ struct parametric_splot
     {
       static constexpr auto whitespace = dsl::ascii::space;
       static constexpr auto rule =
-          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with>,
+          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with_3d>,
                                    LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
                                    LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type>);
       static constexpr auto value = lexy::fold_inplace<graph_desc_3d>(
-          [] { return graph_desc_3d{}; }, [](auto &g, mark_type m) { g.mark = m; },
+          [] { return graph_desc_3d{}; }, [](auto &g, mark_type_3d m) { g.mark = m; },
           [](auto &g, std::string title) { g.title = std::move(title); },
           [](graph_desc_3d &g, const line_type_desc &lt) { g.line_type = lt; });
     };

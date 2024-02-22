@@ -1,7 +1,6 @@
 #pragma once
 
 #include <glm/vec4.hpp>
-#include <type_traits>
 #include <optional>
 #include <string_view>
 
@@ -16,7 +15,7 @@ constexpr glm::vec4 from_rgb(int rgb)
 
 inline constexpr glm::vec4 graph_colors[] = {from_rgb(0xa3be8c), from_rgb(0xebcb8b),
                                              from_rgb(0xd08770)};
-inline constexpr std::size_t num_graph_colors = std::extent_v<decltype(graph_colors)>;
+inline constexpr std::size_t num_graph_colors = std::size(graph_colors);
 
 inline constexpr glm::vec4 background_color = from_rgb(0x4c566a);
 inline constexpr glm::vec4 axis_color = from_rgb(0xd8dee9);

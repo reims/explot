@@ -14,7 +14,6 @@ struct coordinate_system_2d final
   rect bounding_rect;
   program_handle program_for_ticks;
   vao_handle vao_for_ticks;
-  data_desc data_for_axis;
   lines_state_2d axis;
   unique_span<gl_string> x_labels;
   unique_span<gl_string> y_labels;

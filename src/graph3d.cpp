@@ -6,14 +6,14 @@
 namespace
 {
 using namespace explot;
-graph3d::state make_state(const data_desc &data, mark_type mark)
+graph3d::state make_state(data_desc data, mark_type_3d mark)
 {
   switch (mark)
   {
-  case mark_type::lines:
-    return make_line_strip_state_3d(data);
-  case mark_type::points:
-    return points_3d_state(data);
+  case mark_type_3d::lines:
+    return make_line_strip_state_3d(std::move(data));
+  case mark_type_3d::points:
+    return points_3d_state(std::move(data));
   }
   throw 0;
 }
@@ -21,12 +21,10 @@ graph3d::state make_state(const data_desc &data, mark_type mark)
 
 namespace explot
 {
-graph3d::graph3d(data_desc data, mark_type mark, line_type lt)
-    : graph(make_state(data, mark)), data(std::move(data)), lt(lt)
+graph3d::graph3d(data_desc data, mark_type_3d mark, line_type lt)
+    : graph(make_state(std::move(data), mark)), lt(lt)
 {
 }
-
-rect bounding_rect(const graph3d &graph) { return bounding_rect_3d(graph.data, 3); }
 
 void draw(const graph3d &graph, const glm::mat4 &phase_to_view, const glm::mat4 &view_to_clip,
           const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip)

@@ -196,7 +196,7 @@ std::optional<settings_value> get_value(std::span<const std::string> path)
 static constexpr line_type line_types[] = {line_type{1.f, from_rgb(0xa3be8c)},
                                            line_type{1.f, from_rgb(0xebcb8b)},
                                            line_type{1.f, from_rgb(0xd08770)}};
-static constexpr auto num_line_types = std::extent_v<decltype(line_types)>;
+static constexpr auto num_line_types = std::size(line_types);
 } // namespace
 
 namespace explot

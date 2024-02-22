@@ -106,7 +106,7 @@ coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int nu
 {
   auto d = data_for_axes(bounding_rect.lower_bounds, bounding_rect.upper_bounds);
   auto data = data_for_span(d, 2);
-  auto axis = make_lines_state_2d(data);
+  auto axis = make_lines_state_2d(std::move(data));
   const auto steps =
       (bounding_rect.upper_bounds - bounding_rect.lower_bounds) / static_cast<float>(num_ticks - 1);
   auto x_labels = make_unique_span<gl_string>(num_ticks);
@@ -122,7 +122,6 @@ coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int nu
                               .bounding_rect = bounding_rect,
                               .program_for_ticks = program_for_ticks(),
                               .vao_for_ticks = explot::make_vao(),
-                              .data_for_axis = std::move(data),
                               .axis = std::move(axis),
                               .x_labels = std::move(x_labels),
                               .y_labels = std::move(y_labels)};

@@ -10,9 +10,9 @@ struct points_2d_state final
 {
   vao_handle vao;
   program_handle program;
-  std::uint32_t num_points;
+  data_desc data;
   points_2d_state() = default;
-  explicit points_2d_state(const data_desc &data);
+  explicit points_2d_state(data_desc data);
 };
 
 void draw(const points_2d_state &state, float line_width, float point_width, const glm::vec4 &color,
@@ -22,9 +22,9 @@ struct points_3d_state final
 {
   vao_handle vao;
   program_handle program;
-  std::uint32_t num_points;
+  data_desc data;
   points_3d_state() = default;
-  explicit points_3d_state(const data_desc &data);
+  explicit points_3d_state(data_desc data);
 };
 
 void draw(const points_3d_state &state, float line_width, float point_width, const glm::vec4 &color,

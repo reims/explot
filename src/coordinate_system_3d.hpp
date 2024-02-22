@@ -10,7 +10,6 @@ namespace explot
 struct coordinate_system_3d final
 {
   glm::mat4 scale_to_phase;
-  data_desc data;
   lines_state_3d lines;
   font_atlas font;
   unique_span<gl_string> xlabels;

@@ -8,7 +8,6 @@ namespace explot
 struct drag_render_state final
 {
   line_strip_state_2d lines;
-  data_desc data;
 };
 
 drag_render_state make_drag_render_state();

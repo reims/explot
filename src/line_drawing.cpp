@@ -244,7 +244,7 @@ auto program_for_lines_3d()
 
 namespace explot
 {
-line_strip_state_2d make_line_strip_state_2d(const data_desc &data)
+line_strip_state_2d make_line_strip_state_2d(data_desc data)
 {
   line_strip_state_2d state;
 
@@ -256,13 +256,11 @@ line_strip_state_2d make_line_strip_state_2d(const data_desc &data)
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
 
-  state.num_points_per_segment = data.num_points / data.num_segments;
-  state.num_segments = data.num_segments;
-
+  state.data = std::move(data);
   return state;
 }
 
-line_strip_state_3d make_line_strip_state_3d(const data_desc &data)
+line_strip_state_3d make_line_strip_state_3d(data_desc data)
 {
   line_strip_state_3d state;
 
@@ -274,54 +272,55 @@ line_strip_state_3d make_line_strip_state_3d(const data_desc &data)
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
 
-  state.num_points_per_segment = data.num_points / data.num_segments;
-  state.num_segments = data.num_segments;
+  state.data = std::move(data);
 
   return state;
 }
 
-lines_state_2d make_lines_state_2d(const data_desc &d)
+lines_state_2d make_lines_state_2d(data_desc d)
 {
   auto state = lines_state_2d();
   state.program = program_for_lines_2d();
-  state.num_points = d.num_points;
   glBindVertexArray(state.vao);
   glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
+  state.data = std::move(d);
   return state;
 }
 
-lines_state_3d make_lines_state_3d(const data_desc &d)
+lines_state_3d make_lines_state_3d(data_desc d)
 {
   auto state = lines_state_3d();
   state.program = program_for_lines_3d();
-  state.num_points = d.num_points;
   glBindVertexArray(state.vao);
   glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
+  state.data = std::move(d);
   return state;
 }
 
 void draw(const line_strip_state_2d &state, float width, const glm::mat4 &phase_to_screen,
           const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
+  const auto num_points_per_segment = state.data.num_points / state.data.num_segments;
   glBindVertexArray(state.vao);
   uniform ufs[] = {{"width", width},
                    {"phase_to_screen", phase_to_screen},
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  for (auto i = 0u; i < state.num_segments; ++i)
+  for (auto i = 0u; i < state.data.num_segments; ++i)
   {
-    glDrawArrays(GL_LINE_STRIP, i * state.num_points_per_segment, state.num_points_per_segment);
+    glDrawArrays(GL_LINE_STRIP, i * num_points_per_segment, num_points_per_segment);
   }
 }
 
 void draw(const line_strip_state_3d &state, float width, const glm::mat4 &phase_to_clip,
           const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
+  const auto num_points_per_segment = state.data.num_points / state.data.num_segments;
   glBindVertexArray(state.vao);
   uniform ufs[] = {{"width", width},
                    {"phase_to_clip", phase_to_clip},
@@ -329,9 +328,9 @@ void draw(const line_strip_state_3d &state, float width, const glm::mat4 &phase_
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  for (auto i = 0u; i < state.num_segments; ++i)
+  for (auto i = 0u; i < state.data.num_segments; ++i)
   {
-    glDrawArrays(GL_LINE_STRIP, i * state.num_points_per_segment, state.num_points_per_segment);
+    glDrawArrays(GL_LINE_STRIP, i * num_points_per_segment, num_points_per_segment);
   }
 }
 
@@ -344,7 +343,7 @@ void draw(const lines_state_2d &state, float width, const glm::mat4 &phase_to_sc
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_LINES, 0, state.num_points);
+  glDrawArrays(GL_LINES, 0, state.data.num_points);
 }
 
 void draw(const lines_state_3d &state, float width, const glm::mat4 &phase_to_clip,
@@ -357,7 +356,7 @@ void draw(const lines_state_3d &state, float width, const glm::mat4 &phase_to_cl
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_LINES, 0, state.num_points);
+  glDrawArrays(GL_LINES, 0, state.data.num_points);
 }
 
 } // namespace explot

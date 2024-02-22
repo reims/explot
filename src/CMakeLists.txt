@@ -8,7 +8,6 @@ add_executable(explot
   data.cpp
   minmax.cpp
   rect.cpp
-  fps_counter.cpp 
   line_drawing.cpp
   point_drawing.cpp
   font_atlas.cpp
@@ -26,6 +25,7 @@ add_executable(explot
   colors.cpp
   line_type.cpp
   rx-renderers.cpp
+  impulse.cpp
   ../msdfgen/ext/import-font.cpp
 )
 
