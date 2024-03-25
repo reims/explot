@@ -15,6 +15,7 @@
 #include <numbers>
 #include <algorithm>
 #include "colors.hpp"
+#include <ranges>
 
 namespace
 {
@@ -151,13 +152,6 @@ struct expr_ : lexy::expression_production
       },
       [](expr e) { return e; });
 };
-
-// struct captured_expr
-// {
-//   static constexpr auto rule = dsl::position + dsl::p<expr_> + dsl::position;
-//   static constexpr auto value = lexy::callback<lexeme>(
-//       [](const char *s, const expr &, const char *e) { return lexeme(s, e); });
-// };
 
 struct const_expr_;
 
@@ -435,6 +429,31 @@ struct csv_data_
       });
 };
 
+constexpr auto graph_list_2d = lexy::fold_inplace<std::vector<graph_desc_2d>>(
+    [] { return std::vector<graph_desc_2d>(); },
+    [](std::vector<graph_desc_2d> &gs, graph_desc_2d g)
+    {
+      if (std::holds_alternative<csv_data>(g.data))
+      {
+        auto &d = std::get<csv_data>(g.data);
+        if (d.path.empty())
+        {
+          auto rgs = std::views::reverse(gs);
+          auto last_with_path =
+              std::ranges::find_if(rgs,
+                                   [](const graph_desc_2d &h) {
+                                     return std::holds_alternative<csv_data>(h.data)
+                                            && !std::get<csv_data>(h.data).path.empty();
+                                   });
+          if (last_with_path != rgs.end())
+          {
+            d.path = std::get<csv_data>(last_with_path->data).path;
+          }
+        }
+      }
+      gs.push_back(std::move(g));
+    });
+
 struct plot
 {
   static constexpr auto whitespace = dsl::ascii::space;
@@ -486,7 +505,7 @@ struct plot
   struct graphs
   {
     static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
-    static constexpr auto value = lexy::as_list<std::vector<graph_desc_2d>>;
+    static constexpr auto value = graph_list_2d;
   };
 
   static constexpr auto rule =
@@ -565,7 +584,7 @@ struct parametric_plot
   struct graphs
   {
     static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
-    static constexpr auto value = lexy::as_list<std::vector<graph_desc_2d>>;
+    static constexpr auto value = graph_list_2d;
   };
 
   static constexpr auto rule =
@@ -590,6 +609,31 @@ struct parametric_plot
         return cmd;
       });
 };
+
+constexpr auto graph_list_3d = lexy::fold_inplace<std::vector<graph_desc_3d>>(
+    [] { return std::vector<graph_desc_3d>(); },
+    [](std::vector<graph_desc_3d> &gs, graph_desc_3d g)
+    {
+      if (std::holds_alternative<csv_data>(g.data))
+      {
+        auto &d = std::get<csv_data>(g.data);
+        if (d.path.empty())
+        {
+          auto rgs = std::views::reverse(gs);
+          auto last_with_path =
+              std::ranges::find_if(rgs,
+                                   [](const graph_desc_3d &h) {
+                                     return std::holds_alternative<csv_data>(h.data)
+                                            && !std::get<csv_data>(h.data).path.empty();
+                                   });
+          if (last_with_path != rgs.end())
+          {
+            d.path = std::get<csv_data>(last_with_path->data).path;
+          }
+        }
+      }
+      gs.push_back(std::move(g));
+    });
 
 struct splot
 {
@@ -642,7 +686,7 @@ struct splot
   struct graphs
   {
     static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
-    static constexpr auto value = lexy::as_list<std::vector<graph_desc_3d>>;
+    static constexpr auto value = graph_list_3d;
   };
 
   static constexpr auto rule =
@@ -720,7 +764,7 @@ struct parametric_splot
   struct graphs
   {
     static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
-    static constexpr auto value = lexy::as_list<std::vector<graph_desc_3d>>;
+    static constexpr auto value = graph_list_3d;
   };
 
   static constexpr auto rule =
@@ -837,9 +881,6 @@ std::optional<command> parse_command(const char *cmd)
                        : lexy::parse<r::splot>(input, lexy_ext::report_error);
     if (matched.is_success())
     {
-      // auto &d = std::get<parametric_data_3d>(matched.value().graphs[0].data);
-      // fmt::print("splot with x={},y={},z={}\n", d.x_expression, d.y_expression,
-      // d.z_expression);
       return matched.value();
     }
     else
