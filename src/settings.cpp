@@ -14,6 +14,7 @@ namespace
 using namespace std::literals;
 using namespace explot;
 using namespace explot::settings;
+
 struct settings_t final
 {
   samples_setting samples = {100, 100};
@@ -24,6 +25,8 @@ struct settings_t final
   } datafile;
   view_range_2d range = {};
   bool parametric = false;
+  std::string timefmt = "%Y-%m-%d %H:%M:%S";
+  data_type xdata;
 } settings_v;
 
 template <typename Value>
@@ -31,6 +34,19 @@ std::string to_string_(const Value &value)
 {
   return fmt::format("{}", value);
 }
+
+template <>
+std::string to_string_(const data_type &d)
+{
+  switch (d)
+  {
+  case data_type::normal:
+    return "normal";
+  case data_type::time:
+    return "time";
+  }
+}
+
 template <typename Value>
 bool set_(Value &value, std::string_view str)
 {
@@ -39,10 +55,37 @@ bool set_(Value &value, std::string_view str)
 }
 
 template <>
+bool set_<std::string>(std::string &value, std::string_view str)
+{
+  value = str;
+  return true;
+}
+
+template <>
 bool set_(bool &value, std::string_view str)
 {
   value = true;
   return true;
+}
+
+template <>
+bool set_(data_type &value, std::string_view str)
+{
+  fmt::print("{}", str);
+  if (str.starts_with("time"))
+  {
+    value = data_type::time;
+    return true;
+  }
+  else if (str.empty())
+  {
+    value = data_type::normal;
+    return true;
+  }
+  else
+  {
+    return false;
+  }
 }
 
 template <>
@@ -156,6 +199,7 @@ struct settings_value final
 
 std::optional<settings_value> get_value(std::span<const std::string> path)
 {
+  fmt::println("{} {}", path[0], path.size());
   if (path.size() == 1 && path[0] == "samples")
   {
     return settings_value(settings_v.samples);
@@ -186,6 +230,15 @@ std::optional<settings_value> get_value(std::span<const std::string> path)
   else if (path.size() == 1 && path[0] == "parametric")
   {
     return settings_value(settings_v.parametric);
+  }
+  else if (path.size() == 1 && path[0] == "timefmt")
+  {
+    return settings_value(settings_v.timefmt);
+  }
+  else if (path.size() == 1 && path[0] == "xdata")
+  {
+    fmt::println("got xdata");
+    return settings_value(settings_v.xdata);
   }
   else
   {
@@ -233,7 +286,8 @@ samples_setting samples() { return settings_v.samples; }
 samples_setting isosamples() { return settings_v.isosamples; }
 
 bool parametric() { return settings_v.parametric; }
-
+const char *timefmt() { return settings_v.timefmt.c_str(); }
+data_type xdata() { return settings_v.xdata; }
 const line_type &line_type_by_index(int idx)
 {
   assert(idx > 0);

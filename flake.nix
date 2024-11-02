@@ -27,6 +27,7 @@
               linenoise-ng
               fontconfig
               glm
+              howard-hinnant-date
               # pkgs. IS necessary here. Otherwise nixgl as passed to outputs is used.
               pkgs.nixgl.auto.nixGLDefault
             ];

@@ -3,8 +3,10 @@
 #include "gl-handle.hpp"
 #include <glm/gtc/type_ptr.hpp>
 #include <fmt/format.h>
+#include <fmt/chrono.h>
 #include "colors.hpp"
 #include "program.hpp"
+#include "settings.hpp"
 
 namespace
 {
@@ -102,7 +104,8 @@ auto program_for_ticks()
 } // namespace
 namespace explot
 {
-coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int num_ticks)
+coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int num_ticks,
+                                               time_point timebase)
 {
   auto d = data_for_axes(bounding_rect.lower_bounds, bounding_rect.upper_bounds);
   auto data = data_for_span(d, 2);
@@ -112,10 +115,21 @@ coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int nu
   auto x_labels = make_unique_span<gl_string>(num_ticks);
   auto y_labels = make_unique_span<gl_string>(num_ticks);
   auto atlas = make_font_atlas("0123456789.,-");
+  const auto use_time_base = settings::xdata() == settings::data_type::time;
+  auto timefmt = fmt::format("{{{}}}", settings::timefmt());
   for (auto i = 0.0; i < num_ticks; ++i)
   {
     const auto p = bounding_rect.lower_bounds + static_cast<float>(i) * steps;
-    x_labels[i] = gl_string(make_gl_string(atlas.value(), fmt::format("{}", p.x)));
+    if (use_time_base)
+    {
+      auto tp = timebase + std::chrono::duration<float>(p.x);
+      x_labels[i] =
+          gl_string(make_gl_string(atlas.value(), fmt::format(fmt::runtime(timefmt), tp)));
+    }
+    else
+    {
+      x_labels[i] = gl_string(make_gl_string(atlas.value(), fmt::format("{}", p.x)));
+    }
     y_labels[i] = gl_string(make_gl_string(atlas.value(), fmt::format("{}", p.y)));
   }
   return coordinate_system_2d{.num_ticks = num_ticks,

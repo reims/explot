@@ -12,6 +12,7 @@
 #include <string_view>
 #include "program.hpp"
 #include <unordered_map>
+#include <utility>
 
 using namespace std::literals;
 
@@ -375,7 +376,7 @@ struct row_data
 };
 
 template <typename T>
-std::vector<row_data> row_data_for_graphs(const T &gs)
+std::pair<std::vector<row_data>, time_point> row_data_for_graphs(const T &gs)
 {
   auto files = std::unordered_map<std::string_view, std::vector<int>>();
   for (const auto &g : gs)
@@ -397,12 +398,13 @@ std::vector<row_data> row_data_for_graphs(const T &gs)
 
   auto result = std::vector<row_data>();
   result.reserve(files.size());
+  auto timebase = std::optional<time_point>();
   for (auto &[f, indices] : files)
   {
     std::ranges::sort(indices);
     indices.erase(std::ranges::unique(indices).begin(), indices.end());
     auto num_indices = indices.size();
-    auto data = num_indices > 0 ? read_csv(f, settings::datafile::separator(), indices)
+    auto data = num_indices > 0 ? read_csv(f, settings::datafile::separator(), indices, timebase)
                                 : std::vector<float>();
     assert(data.size() % num_indices == 0);
     auto num_points = num_indices > 0 ? data.size() / num_indices : count_lines(f);
@@ -417,7 +419,7 @@ std::vector<row_data> row_data_for_graphs(const T &gs)
     result.emplace_back(std::string(f), std::move(indices),
                         data_desc(std::move(csv_vbo), std::max(1UL, indices.size()), num_points));
   }
-  return result;
+  return std::make_pair(std::move(result), timebase.value_or(time_point()));
 }
 
 data_desc data_for_using_expressions(std::span<const expr> exprs, const row_data &r)
@@ -655,9 +657,9 @@ void print_data(const data_desc &data)
   glUnmapBuffer(GL_ARRAY_BUFFER);
 }
 
-std::vector<data_desc> data_for_plot(const plot_command_2d &plot)
+std::pair<std::vector<data_desc>, time_point> data_for_plot(const plot_command_2d &plot)
 {
-  auto row_data = row_data_for_graphs(plot.graphs);
+  auto [row_data, timebase] = row_data_for_graphs(plot.graphs);
   auto result = std::vector<data_desc>();
   result.reserve(plot.graphs.size());
   std::ranges::copy(
@@ -686,12 +688,12 @@ std::vector<data_desc> data_for_plot(const plot_command_2d &plot)
                 g.data);
           }),
       std::back_inserter(result));
-  return result;
+  return std::make_pair(std::move(result), timebase);
 }
 
 std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
 {
-  auto row_data = row_data_for_graphs(plot.graphs);
+  auto [row_data, time_base] = row_data_for_graphs(plot.graphs);
   auto result = std::vector<data_desc>();
   result.reserve(plot.graphs.size());
   std::ranges::copy(

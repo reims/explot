@@ -19,7 +19,7 @@ plot2d make_plot2d(const plot_command_2d &cmd)
 {
   auto graphs = make_unique_span<graph2d>(cmd.graphs.size());
   auto lts = resolve_line_types(cmd.graphs);
-  auto data = data_for_plot(cmd);
+  auto [data, timebase] = data_for_plot(cmd);
   auto bounding = std::optional<rect>();
   for (std::size_t i = 0; i < cmd.graphs.size(); ++i)
   {
@@ -29,7 +29,7 @@ plot2d make_plot2d(const plot_command_2d &cmd)
     bounding = union_rect(bounding.value_or(br), br);
   }
 
-  return plot2d{bounding.value_or(clip_rect), std::move(graphs), legend(cmd.graphs, lts)};
+  return plot2d{bounding.value_or(clip_rect), std::move(graphs), legend(cmd.graphs, lts), timebase};
 }
 
 void draw(const plot2d &plot, const rect &screen, const rect &view)

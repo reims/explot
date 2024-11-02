@@ -5,6 +5,7 @@
 #include "data.hpp"
 #include "rect.hpp"
 #include "font_atlas.hpp"
+#include "csv.hpp"
 
 namespace explot
 {
@@ -19,7 +20,8 @@ struct coordinate_system_2d final
   unique_span<gl_string> y_labels;
 };
 
-coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int num_ticks);
+coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int num_ticks,
+                                               time_point timebase);
 void draw(const coordinate_system_2d &coordinate_system, const glm::mat4 &view_to_screen,
           const glm::mat4 &screen_to_clip, float width, float tick_size);
 } // namespace explot

@@ -1,11 +1,14 @@
 #pragma once
 #include <filesystem>
 #include <vector>
-#include <glm/vec3.hpp>
 #include <span>
+#include <optional>
+#include <chrono>
 
 namespace explot
 {
-std::vector<float> read_csv(const std::filesystem::path &p, char delim, std::span<int> indices);
+using time_point = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
+std::vector<float> read_csv(const std::filesystem::path &p, char delim, std::span<int> indices,
+                            std::optional<time_point> &timebase);
 std::uint32_t count_lines(const std::filesystem::path &p);
 } // namespace explot

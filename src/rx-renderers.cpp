@@ -81,9 +81,9 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                             auto coordinate_systems =
                                 phase_space | rx::observe_on(on_run_loop)
                                 | rx::transform(
-                                    [](const rect &r) {
+                                    [timebase = const_get(res).plot.timebase](const rect &r) {
                                       return std::make_shared<coordinate_system_2d>(
-                                          make_coordinate_system_2d(r, 5));
+                                          make_coordinate_system_2d(r, 5, timebase));
                                     });
                             auto drag_renderer =
                                 drags()

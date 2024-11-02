@@ -14,6 +14,12 @@ struct samples_setting final
   std::size_t y = 100;
 };
 
+enum class data_type : char
+{
+  normal,
+  time
+};
+
 std::string show(std::span<const std::string> path);
 bool set(std::span<const std::string> path, std::string_view value);
 
@@ -23,6 +29,8 @@ samples_setting isosamples();
 bool parametric();
 
 const line_type &line_type_by_index(int idx);
+const char *timefmt();
+data_type xdata();
 
 namespace datafile
 {

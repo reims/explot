@@ -4,16 +4,20 @@
 #include <string_view>
 #include <charconv>
 #include <algorithm>
+#include <spanstream>
+#include "settings.hpp"
+#include <date/date.h>
 
 namespace explot
 {
 
-std::vector<float> read_csv(const std::filesystem::path &p, char delim, std::span<int> indices)
+std::vector<float> read_csv(const std::filesystem::path &p, char delim, std::span<int> indices,
+                            std::optional<time_point> &timebase)
 {
-  assert(!indices.empty() || indices.front() == 2);
+  assert(!indices.empty());
   auto result = std::vector<float>();
-
   auto f = std::ifstream(p);
+  auto timefmt = settings::timefmt();
   if (f.is_open())
   {
     char buffer[1 << 10];
@@ -32,8 +36,27 @@ std::vector<float> read_csv(const std::filesystem::path &p, char delim, std::spa
         {
           ++idx;
           auto value = 0.0f;
-          auto [_, ec] = std::from_chars(it, eof, value);
-          result.push_back(value);
+          auto [ptr, ec] = std::from_chars(it, eof, value);
+          if (ptr == eof)
+          {
+            result.push_back(value);
+          }
+          else
+          {
+            std::ispanstream ss(std::span(it, eof));
+            time_point tp;
+            date::from_stream(ss, timefmt, tp);
+            if (!ss.fail())
+            {
+              timebase = timebase.value_or(tp);
+              auto d = std::chrono::duration<float>(tp - timebase.value());
+              result.push_back(d.count());
+            }
+            else
+            {
+              result.push_back(0.0f);
+            }
+          }
         }
         ++csv_index;
         it = (eof == line.cend() ? eof : eof + 1);
