@@ -11,7 +11,6 @@
 #include <lexy_ext/report_error.hpp>
 #include <utility>
 #include "settings.hpp"
-#include "overload.hpp"
 #include <numbers>
 #include <algorithm>
 #include "colors.hpp"
@@ -78,12 +77,9 @@ struct var_or_call_
 
   static constexpr auto rule = dsl::p<identifier> >> dsl::if_(dsl::p<params>);
   static constexpr auto value = lexy::callback<var_or_call>(
-      [](std::string name) {
-        return var_or_call{std::move(name), std::nullopt};
-      },
-      [](std::string name, std::vector<expr> params) {
-        return var_or_call{std::move(name), std::move(params)};
-      });
+      [](std::string name) { return var_or_call{std::move(name), std::nullopt}; },
+      [](std::string name, std::vector<expr> params)
+      { return var_or_call{std::move(name), std::move(params)}; });
 };
 
 struct data_ref_
@@ -144,13 +140,9 @@ struct expr_ : lexy::expression_production
   using operation = add_op;
 
   static constexpr auto value = lexy::callback<expr>(
-      [](unary_operator op, expr operand) -> expr {
-        return unary_op{op, std::move(operand)};
-      },
-      [](expr lhs, binary_operator op, expr rhs) -> expr {
-        return binary_op{std::move(lhs), op, std::move(rhs)};
-      },
-      [](expr e) { return e; });
+      [](unary_operator op, expr operand) -> expr { return unary_op{op, std::move(operand)}; },
+      [](expr lhs, binary_operator op, expr rhs) -> expr
+      { return binary_op{std::move(lhs), op, std::move(rhs)}; }, [](expr e) { return e; });
 };
 
 struct const_expr_;
@@ -330,10 +322,9 @@ struct range
     static constexpr auto whitespace = dsl::ascii::space;
     static constexpr auto rule = dsl::lit_c<'*'> | (dsl::peek(dsl::lit_c<']'>) >> dsl::nullopt)
                                  | (dsl::else_ >> dsl::p<const_expr_>);
-    static constexpr auto value =
-        lexy::callback<range_value>([] { return range_value(auto_scale{}); },
-                                    [](lexy::nullopt) { return range_value(std::nullopt); },
-                                    [](float f) { return range_value(f); });
+    static constexpr auto value = lexy::callback<range_value>(
+        [] { return range_value(auto_scale{}); }, [](lexy::nullopt)
+        { return range_value(std::nullopt); }, [](float f) { return range_value(f); });
   };
   static constexpr auto whitespace = dsl::ascii::space;
   static constexpr auto rule =
@@ -423,10 +414,9 @@ struct title
 struct csv_data_
 {
   static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
-  static constexpr auto value = lexy::callback<csv_data>(
-      [](std::string path, std::vector<expr> exprs) {
-        return csv_data{std::move(path), std::move(exprs)};
-      });
+  static constexpr auto value =
+      lexy::callback<csv_data>([](std::string path, std::vector<expr> exprs)
+                               { return csv_data{std::move(path), std::move(exprs)}; });
 };
 
 constexpr auto graph_list_2d = lexy::fold_inplace<std::vector<graph_desc_2d>>(
@@ -441,7 +431,8 @@ constexpr auto graph_list_2d = lexy::fold_inplace<std::vector<graph_desc_2d>>(
           auto rgs = std::views::reverse(gs);
           auto last_with_path =
               std::ranges::find_if(rgs,
-                                   [](const graph_desc_2d &h) {
+                                   [](const graph_desc_2d &h)
+                                   {
                                      return std::holds_alternative<csv_data>(h.data)
                                             && !std::get<csv_data>(h.data).path.empty();
                                    });
@@ -538,10 +529,8 @@ struct parametric_plot
     static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
                                  | dsl::peek_not(str_delim)
                                        >> dsl::twice(dsl::p<expr_>, dsl::sep(dsl::comma));
-    static constexpr auto value = lexy::callback<data_source_2d>(lexy::forward<csv_data>,
-                                                                 [](expr x, expr y) {
-                                                                   return parametric_data_2d{x, y};
-                                                                 });
+    static constexpr auto value = lexy::callback<data_source_2d>(
+        lexy::forward<csv_data>, [](expr x, expr y) { return parametric_data_2d{x, y}; });
   };
 
   struct graph
@@ -622,7 +611,8 @@ constexpr auto graph_list_3d = lexy::fold_inplace<std::vector<graph_desc_3d>>(
           auto rgs = std::views::reverse(gs);
           auto last_with_path =
               std::ranges::find_if(rgs,
-                                   [](const graph_desc_3d &h) {
+                                   [](const graph_desc_3d &h)
+                                   {
                                      return std::holds_alternative<csv_data>(h.data)
                                             && !std::get<csv_data>(h.data).path.empty();
                                    });
@@ -718,10 +708,8 @@ struct parametric_splot
                                  | dsl::peek_not(str_delim)
                                        >> dsl::times<3>(dsl::p<expr_>, dsl::sep(dsl::lit_c<','>));
     static constexpr auto value =
-        lexy::callback<data_source_3d>(lexy::forward<csv_data>,
-                                       [](expr x, expr y, expr z) {
-                                         return parametric_data_3d{x, y, z};
-                                       });
+        lexy::callback<data_source_3d>(lexy::forward<csv_data>, [](expr x, expr y, expr z)
+                                       { return parametric_data_3d{x, y, z}; });
   };
 
   struct graph
@@ -799,27 +787,122 @@ struct quit
   static constexpr auto rule = LEXY_KEYWORD("quit", kw_id) + dsl::eof;
   static constexpr auto value = lexy::constant(quit_command{});
 };
-} // namespace r
-std::vector<std::string> split_string(std::string_view s)
-{
-  auto result = std::vector<std::string>();
-  while (!s.empty())
-  {
-    auto p = s.find(' ');
-    if (p == s.npos)
-    {
-      p = s.size();
-    }
-    if (p > 0)
-    {
-      result.emplace_back(s.substr(0, p));
-    }
-    s.remove_prefix(std::min(s.size(), p + 1));
-  }
-  return result;
-}
 
-static constexpr char settings_path_regex[] = "(\\s+[a-zA-z]+)+";
+template <template <settings_id> typename parser>
+struct settings_parser
+{
+  template <settings_id id>
+  using vv = decltype(parser<id>::value)::return_type;
+  static constexpr auto rule =
+      (LEXY_KEYWORD("samples", kw_id) >> dsl::p<parser<settings_id::samples>>)
+      | (LEXY_KEYWORD("xdata", kw_id) >> dsl::p<parser<settings_id::xdata>>)
+      | (LEXY_KEYWORD("isosamples", kw_id) >> dsl::p<parser<settings_id::isosamples>>)
+      | (LEXY_KEYWORD("datafile", kw_id)
+         >> (LEXY_KEYWORD("separator", kw_id) >> dsl::p<parser<settings_id::datafile_separator>>))
+      | (LEXY_KEYWORD("xrange", kw_id) >> dsl::p<parser<settings_id::xrange>>)
+      | (LEXY_KEYWORD("parametric", kw_id) >> dsl::p<parser<settings_id::parametric>>)
+      | (LEXY_KEYWORD("timefmt", kw_id) >> dsl::p<parser<settings_id::timefmt>>);
+  static constexpr auto value = lexy::construct<enum_sum_t<settings_id, vv, all_settings>>;
+};
+
+struct show
+{
+  static constexpr auto whitespace = dsl::ascii::space;
+
+  template <settings_id id>
+  struct show_parser
+  {
+    static constexpr auto rule = dsl::eof;
+    static constexpr auto value = lexy::constant(show_command::show_setting<id>{});
+  };
+
+  static constexpr auto rule = LEXY_KEYWORD("show", kw_id) + dsl::p<settings_parser<show_parser>>;
+  static constexpr auto value = lexy::construct<show_command>;
+};
+
+struct unset
+{
+  static constexpr auto whitespace = dsl::ascii::space;
+
+  template <settings_id id>
+  struct unset_parser
+  {
+    static constexpr auto rule = dsl::eof;
+    static constexpr auto value = lexy::constant(unset_command::unset_setting<id>{});
+  };
+
+  static constexpr auto rule = LEXY_KEYWORD("unset", kw_id) + dsl::p<settings_parser<unset_parser>>;
+  static constexpr auto value = lexy::construct<unset_command>;
+};
+
+struct set
+{
+  static constexpr auto whitespace = dsl::ascii::space;
+
+  template <typename T>
+  struct value_parser
+  {
+  };
+
+  template <>
+  struct value_parser<samples_setting>
+  {
+    static constexpr auto rule = dsl::p<parsed_decimal>;
+    static constexpr auto value = lexy::construct<samples_setting>;
+  };
+
+  template <>
+  struct value_parser<data_type>
+  {
+    struct time
+    {
+      static constexpr auto rule = LEXY_KEYWORD("time", kw_id);
+      static constexpr auto value = lexy::constant(data_type::time);
+    };
+    static constexpr auto rule = dsl::opt(dsl::p<time>);
+    static constexpr auto value = lexy::callback<data_type>(
+        [](lexy::nullopt) { return data_type::normal; }, [](data_type t) { return t; });
+  };
+
+  template <>
+  struct value_parser<bool>
+  {
+    static constexpr auto rule = dsl::eof;
+    static constexpr auto value = lexy::constant(true);
+  };
+
+  template <>
+  struct value_parser<range_setting>
+  {
+    static constexpr auto rule = dsl::p<range>;
+    static constexpr auto value = lexy::forward<range_setting>;
+  };
+
+  template <>
+  struct value_parser<char>
+  {
+    static constexpr auto rule = dsl::p<string>;
+    static constexpr auto value = lexy::callback<char>([](const std::string &s) { return s[0]; });
+  };
+
+  template <>
+  struct value_parser<std::string>
+  {
+    static constexpr auto rule = dsl::p<string>;
+    static constexpr auto value = lexy::forward<std::string>;
+  };
+
+  template <settings_id id>
+  struct set_parser
+  {
+    static constexpr auto rule = dsl::p<value_parser<settings_type_t<id>>>;
+    static constexpr auto value = lexy::construct<settings_value<id>>;
+  };
+
+  static constexpr auto rule = LEXY_KEYWORD("set", kw_id) + dsl::p<settings_parser<set_parser>>;
+  static constexpr auto value = lexy::construct<set_command>;
+};
+} // namespace r
 
 } // namespace
 
@@ -835,9 +918,22 @@ std::optional<command> parse_command(const char *cmd)
   }
   else if (line.starts_with("show "))
   {
-    if (auto [whole, p] = ctre::starts_with<settings_path_regex>(line.substr(4)); whole)
+    auto result = lexy::parse<r::show>(input, lexy_ext::report_error);
+    if (result.is_success())
     {
-      return show_command{.path = split_string(whole)};
+      return result.value();
+    }
+    else
+    {
+      return std::nullopt;
+    }
+  }
+  else if (line.starts_with("unset "))
+  {
+    auto result = lexy::parse<r::unset>(input, lexy_ext::report_error);
+    if (result.is_success())
+    {
+      return result.value();
     }
     else
     {
@@ -846,14 +942,10 @@ std::optional<command> parse_command(const char *cmd)
   }
   else if (line.starts_with("set "))
   {
-    if (auto [whole, p] = ctre::starts_with<settings_path_regex>(line.substr(3)); whole)
+    auto result = lexy::parse<r::set>(input, lexy_ext::report_error);
+    if (result.is_success())
     {
-      auto value = line.substr(3 + whole.size());
-      while (!value.empty() && value[0] == ' ')
-      {
-        value.remove_prefix(1);
-      }
-      return set_command{.path = split_string(whole), .value = std::string(value)};
+      return result.value();
     }
     else
     {

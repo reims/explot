@@ -3,25 +3,16 @@
 #include <span>
 #include <string>
 #include "line_type.hpp"
+#include "commands.hpp"
 
 namespace explot
 {
 namespace settings
 {
-struct samples_setting final
-{
-  std::size_t x = 100;
-  std::size_t y = 100;
-};
 
-enum class data_type : char
-{
-  normal,
-  time
-};
-
-std::string show(std::span<const std::string> path);
-bool set(std::span<const std::string> path, std::string_view value);
+std::string show(const show_command &cmd);
+bool set(const set_command &cmd);
+void unset(const unset_command &cmd);
 
 samples_setting samples();
 samples_setting isosamples();

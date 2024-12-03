@@ -503,8 +503,8 @@ data_desc data_for_parametric_2d(const expr &x_expr, const expr &y_expr, std::si
   return data_desc(std::move(vbo), 2, num_points);
 }
 
-data_desc data_for_expression_3d(const expr &expr, settings::samples_setting isosamples,
-                                 settings::samples_setting samples, range_setting xrange,
+data_desc data_for_expression_3d(const expr &expr, samples_setting isosamples,
+                                 samples_setting samples, range_setting xrange,
                                  range_setting yrange)
 {
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
@@ -557,9 +557,8 @@ data_desc data_for_expression_3d(const expr &expr, settings::samples_setting iso
 }
 
 data_desc data_for_parametric_3d(const expr &x_expr, const expr &y_expr, const expr &z_expr,
-                                 settings::samples_setting isosamples,
-                                 settings::samples_setting samples, range_setting u_range,
-                                 range_setting v_range)
+                                 samples_setting isosamples, samples_setting samples,
+                                 range_setting u_range, range_setting v_range)
 {
   auto min_u = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           u_range.lower_bound.value_or(-10.0f));

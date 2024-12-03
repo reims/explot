@@ -10,5 +10,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(MSDFGEN_CORE_ONLY ON)
 set(BUILD_SHARED_LIBS ON)
+
 add_subdirectory(msdfgen)
 add_subdirectory(src)

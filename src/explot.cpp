@@ -4,11 +4,9 @@
 #include <GLFW/glfw3.h>
 #include <vector>
 #include <linenoise.h>
-#include <string_view>
 #include <fmt/format.h>
 #include "parse_commands.hpp"
 #include "events.hpp"
-#include "colors.hpp"
 #include "settings.hpp"
 #include <thread>
 #include "rx-renderers.hpp"
@@ -185,19 +183,17 @@ int main()
       }
       else if (std::holds_alternative<show_command>(cmd.value()))
       {
-        fmt::print("{}\n", settings::show(std::get<show_command>(cmd.value()).path));
+        fmt::print("{}\n", settings::show(std::get<show_command>(cmd.value())));
       }
       else if (std::holds_alternative<set_command>(cmd.value()))
       {
         const auto &set_cmd = std::get<set_command>(cmd.value());
-        if (settings::set(set_cmd.path, set_cmd.value))
-        {
-          fmt::print("set value\n");
-        }
-        else
-        {
-          fmt::print("set failed\n");
-        }
+        settings::set(set_cmd);
+      }
+      else if (std::holds_alternative<unset_command>(cmd.value()))
+      {
+        const auto &unset_cmd = std::get<unset_command>(cmd.value());
+        settings::unset(unset_cmd);
       }
       else
       {

@@ -5,6 +5,7 @@
 #include <vector>
 #include "range_setting.hpp"
 #include "box.hpp"
+#include "enum_utilities.hpp"
 
 namespace explot
 {
@@ -135,19 +136,122 @@ struct plot_command_3d final
   range_setting v_range;
 };
 
+struct samples_setting final
+{
+  std::size_t x = 100;
+  std::size_t y = 100;
+};
+
+enum class data_type : char
+{
+  normal,
+  time
+};
+enum class settings_id
+{
+  samples,
+  isosamples,
+  datafile_separator,
+  xrange,
+  parametric,
+  timefmt,
+  xdata
+};
+
+using all_settings =
+    enum_sequence<settings_id, settings_id::samples, settings_id::isosamples,
+                  settings_id::datafile_separator, settings_id::xrange, settings_id::parametric,
+                  settings_id::timefmt, settings_id::xdata>;
+
+template <settings_id>
+struct settings_type
+{
+  // using type = void;
+};
+
+template <>
+struct settings_type<settings_id::samples>
+{
+  using type = samples_setting;
+};
+
+template <>
+struct settings_type<settings_id::isosamples>
+{
+  using type = samples_setting;
+};
+
+template <>
+struct settings_type<settings_id::datafile_separator>
+{
+  using type = char;
+};
+
+template <>
+struct settings_type<settings_id::xrange>
+{
+  using type = range_setting;
+};
+
+template <>
+struct settings_type<settings_id::parametric>
+{
+  using type = bool;
+};
+
+template <>
+struct settings_type<settings_id::timefmt>
+{
+  using type = std::string;
+};
+
+template <>
+struct settings_type<settings_id::xdata>
+{
+  using type = data_type;
+};
+
+template <settings_id id>
+using settings_type_t = typename settings_type<id>::type;
+
+template <settings_id _id>
+struct settings_value
+{
+  static constexpr settings_id id = _id;
+  settings_type_t<id> value;
+};
+
 struct show_command final
 {
-  std::vector<std::string> path;
+  template <settings_id id_>
+  struct show_setting
+  {
+    static constexpr auto id = id_;
+  };
+
+  enum_sum_t<settings_id, show_setting, all_settings> setting;
 };
 
-struct set_command final
+struct unset_command final
 {
-  std::vector<std::string> path;
-  std::string value;
+  template <settings_id id_>
+  struct unset_setting
+  {
+    static constexpr auto id = id_;
+  };
+
+  enum_sum_t<settings_id, unset_setting, all_settings> setting;
+
+  // explicit show_command(show_setting s) : setting(s) {}
 };
 
-using command =
-    std::variant<quit_command, plot_command_2d, plot_command_3d, set_command, show_command>;
+struct set_command
+{
+  enum_sum_t<settings_id, settings_value, all_settings> value;
+};
+
+using command = std::variant<quit_command, plot_command_2d, plot_command_3d, set_command,
+                             show_command, unset_command>;
 
 inline bool is_quit_command(const command &cmd)
 {
@@ -165,4 +269,5 @@ inline const plot_command_2d &as_plot_command(const command &cmd)
 }
 
 inline plot_command_2d &as_plot_command(command &cmd) { return std::get<plot_command_2d>(cmd); }
+
 } // namespace explot

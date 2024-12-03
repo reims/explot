@@ -11,9 +11,9 @@
         devShell.${system}= pkgs.mkShell
           {
             nativeBuildInputs = with pkgs; [
-              clang-tools_16
-              clang_16
-              llvmPackages_16.libcxx
+              clang-tools_19
+              clang_19
+              llvmPackages_19.libcxx
               lldb_15
               cmake
               fmt
@@ -34,6 +34,7 @@
 
             shellHook = ''
 CXX=clang++
+CC=clang
 '';
 
           };

@@ -115,7 +115,7 @@ coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int nu
   auto x_labels = make_unique_span<gl_string>(num_ticks);
   auto y_labels = make_unique_span<gl_string>(num_ticks);
   auto atlas = make_font_atlas("0123456789.,-");
-  const auto use_time_base = settings::xdata() == settings::data_type::time;
+  const auto use_time_base = settings::xdata() == data_type::time;
   auto timefmt = fmt::format("{{{}}}", settings::timefmt());
   for (auto i = 0.0; i < num_ticks; ++i)
   {
