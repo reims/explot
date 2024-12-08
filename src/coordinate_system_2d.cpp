@@ -95,6 +95,12 @@ void main()
 }
 )shader";
 
+auto dummy()
+{
+  auto t = std::chrono::system_clock::now();
+  fmt::print("{:%Y-%m-%d %H:%M:%S}", t);
+}
+
 auto program_for_ticks()
 {
   return explot::make_program(ticks_geometry_shader_src, ticks_vertex_shader_src,
@@ -114,15 +120,17 @@ coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int nu
       (bounding_rect.upper_bounds - bounding_rect.lower_bounds) / static_cast<float>(num_ticks - 1);
   auto x_labels = make_unique_span<gl_string>(num_ticks);
   auto y_labels = make_unique_span<gl_string>(num_ticks);
-  auto atlas = make_font_atlas("0123456789.,-");
+  auto atlas = make_font_atlas("0123456789.,-:abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
   const auto use_time_base = settings::xdata() == data_type::time;
-  auto timefmt = fmt::format("{{{}}}", settings::timefmt());
+  auto timefmt = fmt::format("{{:{}}}", settings::timefmt());
   for (auto i = 0.0; i < num_ticks; ++i)
   {
     const auto p = bounding_rect.lower_bounds + static_cast<float>(i) * steps;
     if (use_time_base)
     {
-      auto tp = timebase + std::chrono::duration<float>(p.x);
+      using dur = typename time_point::duration;
+      auto dt = std::chrono::duration_cast<dur>(std::chrono::duration<float>(p.x));
+      auto tp = timebase + dt;
       x_labels[i] =
           gl_string(make_gl_string(atlas.value(), fmt::format(fmt::runtime(timefmt), tp)));
     }
