@@ -2,10 +2,10 @@
 
 #include "gl-handle.hpp"
 #include "line_drawing.hpp"
-#include "data.hpp"
 #include "rect.hpp"
 #include "font_atlas.hpp"
 #include "csv.hpp"
+#include "unique_span.hpp"
 
 namespace explot
 {
@@ -18,6 +18,7 @@ struct coordinate_system_2d final
   lines_state_2d axis;
   unique_span<gl_string> x_labels;
   unique_span<gl_string> y_labels;
+  font_atlas atlas;
 };
 
 coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int num_ticks,

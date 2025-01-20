@@ -3,17 +3,19 @@
 #include <glm/vec4.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
-#include "msdfgen.h"
-#include <ext/import-font.h>
 #include <cmath>
 #include <fmt/format.h>
 #include <cassert>
 #include <algorithm>
 #include <fontconfig/fontconfig.h>
 #include "program.hpp"
+#include "rect.hpp"
+#include <fstream>
+#include <ios>
 
 namespace
 {
+using namespace explot;
 
 static constexpr auto string_vertex_shader_src = R"shader(#version 330 core
 layout (location = 0) in vec2 uv_lower_bounds;
@@ -25,12 +27,26 @@ out vec2 uv;
 
 uniform vec2 offset;
 uniform mat4 screen_to_clip;
-uniform float scale;
 
 void main()
 {
   uv = uv_lower_bounds + pos * uv_dimensions;
-  gl_Position = screen_to_clip * vec4(offset + scale * (screen_lower_bounds + pos * screen_dimensions), 0, 1);
+  gl_Position = screen_to_clip * vec4(offset + screen_lower_bounds + pos * screen_dimensions, 0, 1);
+}
+)shader";
+
+static constexpr auto atlas_vertex_shader_src = R"shader(#version 330 core
+layout (location = 0) in vec2 pos;
+out vec2 uv;
+
+uniform vec2 offset;
+uniform mat4 screen_to_clip;
+uniform vec2 dims;
+
+void main()
+{
+  uv = pos * dims;
+  gl_Position = screen_to_clip * vec4(offset + dims * pos, 0, 1);
 }
 )shader";
 
@@ -38,31 +54,27 @@ static constexpr auto fragment_shader_src = R"shader(#version 330 core
 in vec2 uv;
 
 out vec4 FragColor;
-uniform sampler2D tex;
-uniform float scale;
+uniform sampler2DRect tex;
 uniform vec4 color;
-float median(float r, float g, float b) {
-    return max(min(r, g), min(max(r, g), b));
-}
 
 void main()
 {
-  vec4 msdf = texture(tex, uv);
-  float sd = median(msdf.x, msdf.y, msdf.z);
-  float s = 4.0 * scale;
-  float dist = clamp(s * (sd - 0.5) + 0.5, 0, 1);
-  float alpha = max(0.0, dist);
-  FragColor = vec4(color.xyz, alpha);
+  float alpha = texture(tex, floor(uv)).r;
+  FragColor = vec4(color.rgb, alpha);
 }
 )shader";
 
 auto make_string_program()
 {
-  return explot::make_program(nullptr, string_vertex_shader_src, fragment_shader_src);
+  return make_program(nullptr, string_vertex_shader_src, fragment_shader_src);
+}
+
+auto make_atlas_program()
+{
+  return make_program(nullptr, atlas_vertex_shader_src, fragment_shader_src);
 }
 
 static constexpr auto num_points = 6;
-
 auto make_tex_vbo()
 {
   auto vbo = explot::make_vbo();
@@ -79,12 +91,12 @@ auto with_free(T *ptr, F f)
   return std::unique_ptr<T, F>(ptr, f);
 }
 
-std::string preferred_monospace_font()
+std::pair<std::string, bool> preferred_monospace_font()
 {
   auto conf = with_free(FcInitLoadConfigAndFonts(), FcConfigDestroy);
   auto pat = with_free(FcPatternCreate(), FcPatternDestroy);
   // reinterpret_cast seems necessary here because FcChar8 is unsigned
-  FcPatternAddString(pat.get(), "family", reinterpret_cast<const FcChar8 *>("monospace"));
+  // FcPatternAddString(pat.get(), "family", reinterpret_cast<const FcChar8 *>("monospace"));
   FcConfigSubstitute(conf.get(), pat.get(), FcMatchPattern);
   FcDefaultSubstitute(pat.get());
   FcResult result;
@@ -92,101 +104,145 @@ std::string preferred_monospace_font()
       with_free(FcFontSort(conf.get(), pat.get(), FcTrue, nullptr, &result), FcFontSetSortDestroy);
   if (!font_patterns || font_patterns->nfont == 0)
   {
-    return "";
+    return {"", false};
   }
-  FcValue val;
-  FcPatternGet(font_patterns->fonts[0], FC_FILE, 0, &val);
-  return std::string(static_cast<const char *>(val.u.f));
+  FcValue formatVal;
+  FcPatternGet(font_patterns->fonts[0], FC_FONTFORMAT, 0, &formatVal);
+  auto format = std::string_view(static_cast<const char *>(formatVal.u.f));
+  auto invert = format != "CFF"; // no idea if this is technically correct, but it works
+  FcValue pathVal;
+  FcPatternGet(font_patterns->fonts[0], FC_FILE, 0, &pathVal);
+  return {std::string(static_cast<const char *>(pathVal.u.f)), invert};
 }
 
 static constexpr explot::rect uv_space{{0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}};
+
+auto init_ft()
+{
+  FT_Library lib;
+  auto _ = FT_Init_FreeType(&lib);
+  return with_free(lib, FT_Done_FreeType);
+}
+
+auto load_face(FT_Library lib, const char *path)
+{
+  FT_Face face;
+  FT_New_Face(lib, path, 0, &face);
+  return with_free(face, FT_Done_Face);
+}
+
+void write_ppm(const unsigned char *buffer, size_t dimx, size_t dimy, const char *filename)
+{
+
+  std::ofstream ofs(filename, std::ios::out | std::ios::binary);
+  ofs << "P6\n" << dimx << ' ' << dimy << "\n255\n";
+
+  for (auto j = 0u; j < dimy; ++j)
+    for (auto i = 0u; i < dimx; ++i)
+      ofs << static_cast<char>(buffer[j * dimx + i]) << static_cast<char>(0)
+          << static_cast<char>(0);
+}
 } // namespace
 
 namespace explot
 {
 using std::make_shared;
 
-std::optional<font_atlas> make_font_atlas(std::string glyphs)
+std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
 {
-  const auto path = preferred_monospace_font();
+  const auto [path, invert] = preferred_monospace_font();
   if (path.empty())
   {
     return std::nullopt;
   }
-  auto ft = with_free(msdfgen::initializeFreetype(), msdfgen::deinitializeFreetype);
+  auto ft = init_ft();
   if (ft)
   {
-    auto font = with_free(msdfgen::loadFont(ft.get(), path.c_str()), msdfgen::destroyFont);
+    auto font = load_face(ft.get(), path.c_str());
     if (font)
     {
-      auto shapes = make_unique_span<msdfgen::Shape>(glyphs.size());
-      auto glyphs_data = make_unique_span<glyph_data>(glyphs.size());
-      auto glyphs_dimensions = make_unique_span<std::pair<int, int>>(glyphs.size());
+      auto shapes = std::vector<glyph_handle>();
+      shapes.reserve(glyphs.size());
+      auto glyphs_data = std::vector<glyph_data>();
+      glyphs_data.reserve(glyphs.size());
+      //      auto glyphs_dimensions = make_unique_span<std::pair<int, int>>(glyphs.size());
+      //      auto boundss = std::vector<msdfgen::Shape::Bounds>();
       auto width = 0;
       auto height = 0;
-      // fmt::print("start loading glyphs\n");
-      for (auto i = 0ULL; i < glyphs.size(); ++i)
+      auto error = FT_Set_Char_Size(font.get(), 0, size << 6, 0, 162);
+      if (error)
       {
-        msdfgen::loadGlyph(shapes[i], font.get(), static_cast<msdfgen::unicode_t>(glyphs[i]));
-        msdfgen::edgeColoringSimple(shapes[i], 3);
-        const auto bounds = shapes[i].getBounds(1.0);
-        const auto glyph_width = static_cast<int>(std::ceil(bounds.r - bounds.l));
-        const auto glyph_height = static_cast<int>(std::ceil(bounds.t - bounds.b));
-        glyphs_data[i].lower_bounds = {bounds.l, bounds.b};
-        glyphs_data[i].upper_bounds = {bounds.r, bounds.t};
-        glyphs_data[i].uv_lb = {width, 0.0f};
-        glyphs_data[i].uv_ub = {width + glyph_width, glyph_height};
-        glyphs_dimensions[i].first = glyph_width;
-        glyphs_dimensions[i].second = glyph_height;
-        width += glyph_width;
-        height = std::max(height, glyph_height);
+        fmt::println("error in set char size");
       }
-      // fmt::print("start making tex data\n");
-      auto tex_data = std::make_unique<float[]>(3 * static_cast<std::size_t>(width)
-                                                * static_cast<std::size_t>(height));
-      std::fill_n(tex_data.get(), 3 * width * height, 1.0f);
-      // fmt::print("texture dims = {} x {} = {}\n", width, height, width * height);
       for (auto i = 0ULL; i < glyphs.size(); ++i)
       {
-        auto msdf =
-            msdfgen::Bitmap<float, 3>(glyphs_dimensions[i].first, glyphs_dimensions[i].second);
-        msdfgen::generateMSDF(
-            msdf, shapes[i], 4.0, 1.0,
-            msdfgen::Vector2(-glyphs_data[i].lower_bounds.x, -glyphs_data[i].lower_bounds.y));
-        // fmt::print("generated msdf for {}\n", glyphs[i]);
-        auto start_row = static_cast<int>(glyphs_data[i].uv_lb.y);
-        auto start_column = static_cast<int>(glyphs_data[i].uv_lb.x);
-        auto end_row = static_cast<int>(glyphs_data[i].uv_ub.y);
-        auto columns = static_cast<int>(glyphs_data[i].uv_ub.x) - start_column;
-        for (auto row = start_row; row < end_row; ++row)
+        auto glyph_index = FT_Get_Char_Index(font.get(), glyphs[i]);
+        FT_Load_Glyph(font.get(), glyph_index, FT_LOAD_DEFAULT);
+        FT_Glyph g;
+        FT_Get_Glyph(font->glyph, &g);
+        FT_Glyph_To_Bitmap(&g, FT_RENDER_MODE_NORMAL, 0, 1);
+        shapes.emplace_back(g, FT_Done_Glyph);
+        auto bitmap = (FT_BitmapGlyph)shapes[i].get();
+        glyphs_data.emplace_back(glm::vec2(width, 0),
+                                 glm::vec2(width + bitmap->bitmap.width, bitmap->bitmap.rows));
+        width += bitmap->bitmap.width;
+        height = std::max(height, static_cast<int>(bitmap->bitmap.rows));
+      }
+      auto tex_data = std::make_unique<unsigned char[]>(static_cast<std::size_t>(width)
+                                                        * static_cast<std::size_t>(height));
+      // std::fill_n(tex_data.get(), width * height, 0);
+      auto dims = glm::vec2(width, height);
+      auto start_column = 0u;
+      for (auto i = 0ULL; i < glyphs.size(); ++i)
+      {
+        auto bitmap = (FT_BitmapGlyph)shapes[i].get();
+        // fmt::println("width: {} pitch: {}", bitmap->bitmap.width, bitmap->bitmap.pitch);
+        write_ppm(bitmap->bitmap.buffer, bitmap->bitmap.width, bitmap->bitmap.rows,
+                  fmt::format("test_{}.ppm", glyphs[i]).c_str());
+        for (auto row = 0u; row < bitmap->bitmap.rows; ++row)
         {
-          // fmt::print("copying row {} start index = {}, start in msdf = {}, columns = {}\n", row,
-          //            row * width + start_column, row * glyphs_dimensions[i].first, columns);
-          std::memcpy(tex_data.get() + 3 * (row * width + start_column),
-                      static_cast<const float *>(msdf) + 3 * row * glyphs_dimensions[i].first,
-                      3 * static_cast<std::size_t>(columns) * sizeof(float));
+          std::memcpy(tex_data.get() + (row * width + start_column),
+                      bitmap->bitmap.buffer
+                          + (bitmap->bitmap.rows - row - 1) * bitmap->bitmap.width,
+                      bitmap->bitmap.width);
         }
-        // fmt::print("memcpied data for {}\n", glyphs[i]);
-        glyphs_data[i].uv_lb =
-            (glyphs_data[i].uv_lb + glm::vec2(0.5f, 0.5f)) / glm::vec2(width, height);
-        glyphs_data[i].uv_ub =
-            (glyphs_data[i].uv_ub - glm::vec2(0.5f, 0.5f)) / glm::vec2(width, height);
-        ;
+        start_column += bitmap->bitmap.width;
+        // glyphs_data[i].uv_lb /= dims;
+        // glyphs_data[i].uv_ub /= dims;
       }
-      // fmt::print("start make texture\n");
+
+      write_ppm(tex_data.get(), width, height, fmt::format("atlas_{}.ppm", glyphs.size()).c_str());
+
       auto tex = make_texture();
-      glBindTexture(GL_TEXTURE_2D, tex);
-      const auto border_color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-      glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(border_color));
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, tex_data.get());
-      glGenerateMipmap(GL_TEXTURE_2D);
-      return font_atlas{.glyphs = std::move(glyphs),
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_RECTANGLE, tex);
+      const auto border_color = glm::vec4(0);
+      glTexParameterfv(GL_TEXTURE_RECTANGLE, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(border_color));
+      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+      glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE,
+                   tex_data.get());
+      glFinish();
+      // glGenerateMipmap(GL_TEXTURE_RECTANGLE);
+      auto quad = make_tex_vbo();
+      auto vao = make_vao();
+      glBindVertexArray(vao);
+      glBindBuffer(GL_ARRAY_BUFFER, quad);
+      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+      glEnableVertexAttribArray(0);
+      return font_atlas{.ft = std::move(ft),
+                        .glyphs = std::move(glyphs),
+                        .ft_glyphs = std::move(shapes),
                         .data = std::move(glyphs_data),
-                        .texture = make_shared<texture_handle>(std::move(tex))};
+                        .texture = std::move(tex),
+                        .font = std::move(font),
+                        .dims = {width, height},
+                        .quad = std::move(quad),
+                        .vao = std::move(vao),
+                        .program = make_atlas_program()};
     }
   }
   fmt::print("failed make font atlas\n");
@@ -195,6 +251,10 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs)
 
 gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
 {
+  // auto temp = std::make_unique<unsigned char[]>(static_cast<size_t>(atlas.dims.x *
+  // atlas.dims.y)); glGetTexImage(GL_TEXTURE_RECTANGLE, 0, GL_RED, GL_UNSIGNED_BYTE, temp.get());
+  // write_ppm(temp.get(), static_cast<size_t>(atlas.dims.x), static_cast<size_t>(atlas.dims.y),
+  // fmt::format("atlas2_{}.ppm", atlas.glyphs.size()).c_str());
   auto vao = make_vao();
   glBindVertexArray(vao);
   auto uv_coordinates = std::make_unique<glm::vec2[]>(2 * str.size());
@@ -202,29 +262,41 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
   auto width = 0.0f;
   auto y_lower_bound = std::numeric_limits<float>::max();
   auto y_upper_bound = std::numeric_limits<float>::lowest();
+  auto previous = 0;
+  auto has_kerning = FT_HAS_KERNING(atlas.font.get());
   for (auto i = 0ULL; i < str.size(); ++i)
   {
-    if (std::isspace(str[i]))
-    {
-      width += 5;
-      continue;
-    }
+    // if (std::isspace(str[i]))
+    // {
+    //   width += space_width;
+    //   continue;
+    // }
     auto idx = static_cast<std::size_t>(
         std::distance(std::begin(atlas.glyphs),
                       std::find(std::begin(atlas.glyphs), std::end(atlas.glyphs), str[i])));
-    assert(idx < atlas.glyphs.size());
+    auto glyph_index = FT_Get_Char_Index(atlas.font.get(), str[i]);
+    assert(idx < atlas.glyphs.size() && glyph_index > 0);
+    auto bitmap = (FT_BitmapGlyph)atlas.ft_glyphs[idx].get();
     const auto &uv_lower_bounds = atlas.data[idx].uv_lb;
     const auto uv_dimensions = atlas.data[idx].uv_ub - atlas.data[idx].uv_lb;
     static_assert(sizeof(glm::vec2) == 2 * sizeof(float));
     std::memcpy(&uv_coordinates[2 * i], &uv_lower_bounds, sizeof(glm::vec2));
     std::memcpy(&uv_coordinates[2 * i + 1], &uv_dimensions, sizeof(glm::vec2));
-    const auto screen_lower_bounds = atlas.data[idx].lower_bounds + glm::vec2(width, 0.0f);
-    const auto screen_dimensions = atlas.data[idx].upper_bounds - atlas.data[idx].lower_bounds;
-    width += atlas.data[idx].upper_bounds.x;
-    y_lower_bound = std::min(y_lower_bound, atlas.data[idx].lower_bounds.y);
-    y_upper_bound = std::max(y_upper_bound, atlas.data[idx].upper_bounds.y);
+    if (i > 0 && has_kerning)
+    {
+      FT_Vector kerning = {0, 0};
+      FT_Get_Kerning(atlas.font.get(), previous, glyph_index, FT_KERNING_DEFAULT, &kerning);
+      width += (kerning.x >> 6);
+    }
+    const auto screen_lower_bounds =
+        glm::vec2(bitmap->left, bitmap->top - bitmap->bitmap.rows) + glm::vec2(width, 0.0f);
+    const auto screen_dimensions = glm::vec2(bitmap->bitmap.width, bitmap->bitmap.rows);
+    width += bitmap->root.advance.x >> 16;
+    y_lower_bound = std::min(y_lower_bound, screen_lower_bounds.y);
+    y_upper_bound = std::max(y_upper_bound, screen_lower_bounds.y + screen_dimensions.y);
     std::memcpy(&screen_coordinates[2 * i], &screen_lower_bounds, sizeof(glm::vec2));
     std::memcpy(&screen_coordinates[2 * i + 1], &screen_dimensions, sizeof(glm::vec2));
+    previous = glyph_index;
   }
   auto uv_vbo = make_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, uv_vbo);
@@ -262,20 +334,35 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
 }
 
 void draw(const gl_string &str, const glm::mat4 &screen_to_clip, const glm::vec2 &offset,
-          const glm::vec4 &color, float scale, const glm::vec2 &anchor)
+          const glm::vec4 &color, const glm::vec2 &anchor)
 {
   // fmt::print("draw string\n");
   glBindVertexArray(str.vao);
-  glBindTexture(GL_TEXTURE_2D, *str.texture);
+  glBindTexture(GL_TEXTURE_RECTANGLE, str.texture);
   glUseProgram(str.program);
+  // a * (u - l) = au - al
   const auto offset_with_anchor =
-      offset - scale * anchor * str.upper_bounds - scale * (1.0f - anchor) * str.lower_bounds;
+      glm::floor(offset - anchor * str.upper_bounds - (1.0f - anchor) * str.lower_bounds);
   glUniformMatrix4fv(glGetUniformLocation(str.program, "screen_to_clip"), 1, GL_FALSE,
                      glm::value_ptr(screen_to_clip));
   glUniform2fv(glGetUniformLocation(str.program, "offset"), 1, glm::value_ptr(offset_with_anchor));
-  glUniform1f(glGetUniformLocation(str.program, "scale"), scale);
   glUniform4fv(glGetUniformLocation(str.program, "color"), 1, glm::value_ptr(color));
   glDrawArraysInstanced(GL_TRIANGLES, 0, num_points, str.size);
 }
 
+void draw(const font_atlas &atlas, const glm::mat4 &screen_to_clip, const glm::vec2 &offset)
+{
+  auto color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+  glBindVertexArray(atlas.vao);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_RECTANGLE, atlas.texture);
+  glUseProgram(atlas.program);
+  glUniform1i(glGetUniformLocation(atlas.program, "tex"), 0);
+  glUniformMatrix4fv(glGetUniformLocation(atlas.program, "screen_to_clip"), 1, GL_FALSE,
+                     glm::value_ptr(screen_to_clip));
+  glUniform2fv(glGetUniformLocation(atlas.program, "offset"), 1, glm::value_ptr(offset));
+  glUniform2fv(glGetUniformLocation(atlas.program, "dims"), 1, glm::value_ptr(atlas.dims));
+  glUniform4fv(glGetUniformLocation(atlas.program, "color"), 1, glm::value_ptr(color));
+  glDrawArrays(GL_TRIANGLES, 0, num_points);
+}
 } // namespace explot

@@ -120,7 +120,8 @@ coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int nu
       (bounding_rect.upper_bounds - bounding_rect.lower_bounds) / static_cast<float>(num_ticks - 1);
   auto x_labels = make_unique_span<gl_string>(num_ticks);
   auto y_labels = make_unique_span<gl_string>(num_ticks);
-  auto atlas = make_font_atlas("0123456789.,-:abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  auto atlas =
+      make_font_atlas("0123456789.,-:abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 16);
   const auto use_time_base = settings::xdata() == data_type::time;
   auto timefmt = fmt::format("{{:{}}}", settings::timefmt());
   for (auto i = 0.0; i < num_ticks; ++i)
@@ -146,7 +147,8 @@ coordinate_system_2d make_coordinate_system_2d(const rect &bounding_rect, int nu
                               .vao_for_ticks = explot::make_vao(),
                               .axis = std::move(axis),
                               .x_labels = std::move(x_labels),
-                              .y_labels = std::move(y_labels)};
+                              .y_labels = std::move(y_labels),
+                              .atlas = std::move(*atlas)};
 }
 void draw(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen,
           const glm::mat4 &screen_to_clip, float width, float tick_size)
@@ -179,13 +181,16 @@ void draw(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen,
     const auto p_x =
         cs.bounding_rect.lower_bounds + glm::vec3(static_cast<float>(i) * steps.x, 0.0f, 0.0f);
     auto o_x = view_to_screen * glm::vec4(p_x, 1.0f);
-    o_x.y += -0.5 * tick_size - 1.0f;
-    draw(cs.x_labels[i], screen_to_clip, o_x, text_color, 0.5f, {0.5f, 1.0f});
+    o_x.y += -2.0f * tick_size - 1.0f;
+    o_x = glm::floor(o_x);
+    draw(cs.x_labels[i], screen_to_clip, o_x, text_color, {0.5f, 1.0f});
     const auto p_y =
         cs.bounding_rect.lower_bounds + glm::vec3(0.0f, static_cast<float>(i) * steps.y, 0.0f);
     auto o_y = view_to_screen * glm::vec4(p_y, 1.0f);
-    o_y.x += -0.5 * tick_size - 1.0f;
-    draw(cs.y_labels[i], screen_to_clip, o_y, text_color, 0.5f, {1.0f, 0.5f});
+    o_y.x += -2.0f * tick_size - 1.0f;
+    o_y = glm ::floor(o_y);
+    draw(cs.y_labels[i], screen_to_clip, o_y, text_color, {1.0f, 0.5f});
   }
+  draw(cs.atlas, screen_to_clip, {500, 500});
 }
 } // namespace explot

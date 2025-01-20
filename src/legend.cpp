@@ -33,7 +33,7 @@ std::string glyphs_for_graphs(std::span<const graph_desc_3d> graphs)
     glyphs.insert(g.title.begin(), g.title.end());
   }
   auto str = std::string(glyphs.begin(), glyphs.end());
-  str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
+  // str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
   return str;
 }
 
@@ -55,7 +55,7 @@ namespace explot
 {
 
 legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs)).value())
+    : font(make_font_atlas(glyphs_for_graphs(graphs), 12).value())
 {
   int i = 0;
   for (const auto &g : graphs)
@@ -76,7 +76,7 @@ legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type>
 }
 
 legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs)).value())
+    : font(make_font_atlas(glyphs_for_graphs(graphs), 12).value())
 {
   int i = 0;
   titles.reserve(graphs.size());
@@ -99,15 +99,10 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
 
 void draw(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip)
 {
-  const auto scale = 0.5f;
-  const auto text_width =
-      std::ranges::max(std::views::transform(l.titles, [](const gl_string &s)
-                                             { return s.upper_bounds.x - s.lower_bounds.x; }))
-      * scale;
-  const auto text_height =
-      std::ranges::max(std::views::transform(l.titles, [](const gl_string &s)
-                                             { return s.upper_bounds.y - s.lower_bounds.y; }))
-      * scale;
+  const auto text_width = std::ranges::max(std::views::transform(
+      l.titles, [](const gl_string &s) { return s.upper_bounds.x - s.lower_bounds.x; }));
+  const auto text_height = std::ranges::max(std::views::transform(
+      l.titles, [](const gl_string &s) { return s.upper_bounds.y - s.lower_bounds.y; }));
   const auto start_of_mark = screen.upper_bounds.x - text_width - 20.f;
   assert(l.titles.size() == l.marks.size());
   for (auto i = 0u; i < l.titles.size(); ++i)
@@ -119,11 +114,13 @@ void draw(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip)
         .upper_bounds = {start_of_mark + 20.0f, screen.upper_bounds.y - i * text_height, 1.0f}};
     const auto view_to_screen = transform(clip_rect, screen_rect);
     std::visit(overload([&](const points_2d_state &p)
-                        { draw(p, 1.00f, 5.0f, l.colors[i], view_to_screen, screen_to_clip); },
+                        { draw(p, 1.0f, 5.0f, l.colors[i], view_to_screen, screen_to_clip); },
                         [&](const lines_state_2d &ls)
                         { draw(ls, 1.0f, view_to_screen, screen_to_clip, l.colors[i]); }),
                m);
-    draw(s, screen_to_clip, {start_of_mark + 20.0f, screen_rect.lower_bounds.y}, text_color, scale);
+    draw(s, screen_to_clip, {start_of_mark + 20.0f - 200, screen_rect.lower_bounds.y - 200},
+         text_color, {0.0f, 1.0f});
+    // draw(l.font, screen_to_clip, {500, 500});
   }
 }
 } // namespace explot

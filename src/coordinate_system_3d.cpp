@@ -61,7 +61,7 @@ namespace explot
 coordinate_system_3d::coordinate_system_3d(const rect &phase_space, std::uint32_t num_ticks)
     : scale_to_phase(transform(clip_rect, phase_space)),
       lines(make_lines_state_3d(data_for_coordinate_system(num_ticks))),
-      font(make_font_atlas("+-.,0123456789eE").value()), xlabels(num_ticks), ylabels(num_ticks),
+      font(make_font_atlas("+-.,0123456789eE", 10).value()), xlabels(num_ticks), ylabels(num_ticks),
       zlabels(num_ticks)
 {
   auto xstrs =
@@ -92,14 +92,13 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
   const auto num_ticks = cs.xlabels.size;
   const auto step = 2.0f / static_cast<float>(num_ticks - 1);
   const auto radius = 0.06f;
-  const auto text_scale = 0.4f;
   for (auto i = 0u; i < num_ticks; ++i)
   {
     auto offset = phase_to_clip * cs.scale_to_phase
                   * glm::vec4(-1.0f + i * step, -1.0f - radius, -1.0f, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    draw(cs.xlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, text_scale, {0.5f, 1.0f});
+    draw(cs.xlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
@@ -107,7 +106,7 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f, -1.0f + i * step, -1.0f - radius, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    draw(cs.ylabels[i], screen_to_clip, {offset.x, offset.y}, text_color, text_scale, {0.5f, 1.0f});
+    draw(cs.ylabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
@@ -115,7 +114,7 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f - radius, -1.0f, -1.0f + i * step, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    draw(cs.zlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, text_scale, {0.5f, 1.0f});
+    draw(cs.zlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
   }
 }
 } // namespace explot

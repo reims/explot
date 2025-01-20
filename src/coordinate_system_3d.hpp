@@ -4,6 +4,7 @@
 #include "data.hpp"
 #include "rect.hpp"
 #include "font_atlas.hpp"
+#include "unique_span.hpp"
 
 namespace explot
 {

@@ -26,7 +26,6 @@ add_executable(explot
   line_type.cpp
   rx-renderers.cpp
   impulse.cpp
-  ../msdfgen/ext/import-font.cpp
 )
 
 include(FetchContent)
@@ -38,9 +37,6 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(explot PRIVATE Threads::Threads)
 
-target_link_libraries(explot PRIVATE msdfgen-core)
-
-target_include_directories(explot PRIVATE ../msdfgen)
 target_include_directories(explot PRIVATE ../RxCpp/Rx/v2/src)
 
 set(OpenGL_GL_PREFERENCE GLVND)
@@ -72,4 +68,4 @@ target_link_libraries(explot PRIVATE Fontconfig::Fontconfig)
 
 target_compile_options(explot  PUBLIC)
 
-target_compile_options(explot PRIVATE -Wpedantic -Werror -Wextra -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-deprecated-declarations -Wno-unused-command-line-argument -stdlib=libc++)
+target_compile_options(explot PRIVATE -Og -Wpedantic -Werror -Wextra -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-deprecated-declarations -Wno-unused-command-line-argument -stdlib=libc++)
