@@ -197,8 +197,8 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
       {
         auto bitmap = (FT_BitmapGlyph)shapes[i].get();
         // fmt::println("width: {} pitch: {}", bitmap->bitmap.width, bitmap->bitmap.pitch);
-        write_ppm(bitmap->bitmap.buffer, bitmap->bitmap.width, bitmap->bitmap.rows,
-                  fmt::format("test_{}.ppm", glyphs[i]).c_str());
+        // write_ppm(bitmap->bitmap.buffer, bitmap->bitmap.width, bitmap->bitmap.rows,
+        //          fmt::format("test_{}.ppm", glyphs[i]).c_str());
         for (auto row = 0u; row < bitmap->bitmap.rows; ++row)
         {
           std::memcpy(tex_data.get() + (row * width + start_column),
@@ -211,7 +211,8 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
         // glyphs_data[i].uv_ub /= dims;
       }
 
-      write_ppm(tex_data.get(), width, height, fmt::format("atlas_{}.ppm", glyphs.size()).c_str());
+      // write_ppm(tex_data.get(), width, height, fmt::format("atlas_{}.ppm",
+      // glyphs.size()).c_str());
 
       auto tex = make_texture();
       glActiveTexture(GL_TEXTURE0);

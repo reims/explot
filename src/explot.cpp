@@ -14,6 +14,7 @@
 #include <semaphore>
 #include <cstdlib>
 #include <filesystem>
+#include "colors.hpp"
 
 namespace
 {
@@ -109,7 +110,7 @@ static constexpr auto uimain = [](auto commands)
   {
     // fmt::print("start frame\n");
     glfwPollEvents();
-    glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+    glClearColor(background_color.x, background_color.y, background_color.z, 1.00f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     int width = 0, height = 0;

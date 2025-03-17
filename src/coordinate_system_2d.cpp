@@ -191,6 +191,6 @@ void draw(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen,
     o_y = glm ::floor(o_y);
     draw(cs.y_labels[i], screen_to_clip, o_y, text_color, {1.0f, 0.5f});
   }
-  draw(cs.atlas, screen_to_clip, {500, 500});
+  // draw(cs.atlas, screen_to_clip, {500, 500});
 }
 } // namespace explot
