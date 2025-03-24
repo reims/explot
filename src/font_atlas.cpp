@@ -121,14 +121,14 @@ auto init_ft()
 {
   FT_Library lib;
   auto _ = FT_Init_FreeType(&lib);
-  return with_free(lib, FT_Done_FreeType);
+  return freetype_handle(lib);
 }
 
 auto load_face(FT_Library lib, const char *path)
 {
   FT_Face face;
   FT_New_Face(lib, path, 0, &face);
-  return with_free(face, FT_Done_Face);
+  return font_handle(face);
 }
 
 void write_ppm(const unsigned char *buffer, size_t dimx, size_t dimy, const char *filename)
@@ -181,7 +181,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
         FT_Glyph g;
         FT_Get_Glyph(font->glyph, &g);
         FT_Glyph_To_Bitmap(&g, FT_RENDER_MODE_NORMAL, 0, 1);
-        shapes.emplace_back(g, FT_Done_Glyph);
+        shapes.emplace_back(g);
         auto bitmap = (FT_BitmapGlyph)shapes[i].get();
         glyphs_data.emplace_back(glm::vec2(width, 0),
                                  glm::vec2(width + bitmap->bitmap.width, bitmap->bitmap.rows));
@@ -290,7 +290,8 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
       width += (kerning.x >> 6);
     }
     const auto screen_lower_bounds =
-        glm::vec2(bitmap->left, bitmap->top - bitmap->bitmap.rows) + glm::vec2(width, 0.0f);
+        glm::vec2(bitmap->left, bitmap->top - static_cast<int>(bitmap->bitmap.rows))
+        + glm::vec2(width, 0.0f);
     const auto screen_dimensions = glm::vec2(bitmap->bitmap.width, bitmap->bitmap.rows);
     width += bitmap->root.advance.x >> 16;
     y_lower_bound = std::min(y_lower_bound, screen_lower_bounds.y);

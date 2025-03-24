@@ -18,12 +18,25 @@ struct glyph_data final
   glm::vec2 uv_ub;
 };
 
+// With unique_ptr<T, void (*)(T*)>, the function ptr is a member variable of unique_ptr. This
+// doubles the size of unique_ptr and the function call is not static anymore. This wrapper class
+// makes the function ptr a compile-time constant
+template <auto f>
+struct func_wrapper
+{
+  template <typename T>
+  void operator()(T &&t)
+  {
+    f(std::forward<T>(t));
+  }
+};
+
 using ft_library = std::remove_pointer_t<FT_Library>;
 using ft_font = std::remove_pointer_t<FT_Face>;
 using ft_glyph = std::remove_pointer_t<FT_Glyph>;
-using freetype_handle = std::unique_ptr<ft_library, int (*)(ft_library *)>;
-using font_handle = std::unique_ptr<ft_font, int (*)(ft_font *)>;
-using glyph_handle = std::unique_ptr<ft_glyph, void (*)(ft_glyph *)>;
+using freetype_handle = std::unique_ptr<ft_library, func_wrapper<FT_Done_FreeType>>;
+using font_handle = std::unique_ptr<ft_font, func_wrapper<FT_Done_Face>>;
+using glyph_handle = std::unique_ptr<ft_glyph, func_wrapper<FT_Done_Glyph>>;
 
 struct font_atlas final
 {
