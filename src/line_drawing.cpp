@@ -1,6 +1,5 @@
 #include "line_drawing.hpp"
 #include "GL/glew.h"
-#include <type_traits>
 #include <glm/gtc/type_ptr.hpp>
 #include <fmt/format.h>
 #include <memory>
@@ -250,7 +249,6 @@ line_strip_state_2d make_line_strip_state_2d(data_desc data)
 
   glBindVertexArray(state.vao);
   state.program = program_for_lines_2d();
-  glBindVertexArray(state.vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
@@ -266,12 +264,11 @@ line_strip_state_3d make_line_strip_state_3d(data_desc data)
 
   glBindVertexArray(state.vao);
   state.program = program_for_lines_3d();
-  glBindVertexArray(state.vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
-
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
   state.data = std::move(data);
 
   return state;
@@ -297,6 +294,7 @@ lines_state_3d make_lines_state_3d(data_desc d)
   glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d.ebo);
   state.data = std::move(d);
   return state;
 }
@@ -304,23 +302,20 @@ lines_state_3d make_lines_state_3d(data_desc d)
 void draw(const line_strip_state_2d &state, float width, const glm::mat4 &phase_to_screen,
           const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
-  const auto num_points_per_segment = state.data.num_points / state.data.num_segments;
   glBindVertexArray(state.vao);
   uniform ufs[] = {{"width", width},
                    {"phase_to_screen", phase_to_screen},
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  for (auto i = 0u; i < state.data.num_segments; ++i)
-  {
-    glDrawArrays(GL_LINE_STRIP, i * num_points_per_segment, num_points_per_segment);
-  }
+  glMultiDrawElements(GL_LINE_STRIP, state.data.count.data(), GL_UNSIGNED_INT,
+                      reinterpret_cast<const void *const *>(state.data.starts.data()),
+                      state.data.count.size());
 }
 
 void draw(const line_strip_state_3d &state, float width, const glm::mat4 &phase_to_clip,
           const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip, const glm::vec4 &color)
 {
-  const auto num_points_per_segment = state.data.num_points / state.data.num_segments;
   glBindVertexArray(state.vao);
   uniform ufs[] = {{"width", width},
                    {"phase_to_clip", phase_to_clip},
@@ -328,10 +323,9 @@ void draw(const line_strip_state_3d &state, float width, const glm::mat4 &phase_
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  for (auto i = 0u; i < state.data.num_segments; ++i)
-  {
-    glDrawArrays(GL_LINE_STRIP, i * num_points_per_segment, num_points_per_segment);
-  }
+  glMultiDrawElements(GL_LINE_STRIP, state.data.count.data(), GL_UNSIGNED_INT,
+                      reinterpret_cast<const void *const *>(state.data.starts.data()),
+                      state.data.count.size());
 }
 
 void draw(const lines_state_2d &state, float width, const glm::mat4 &phase_to_screen,

@@ -847,8 +847,10 @@ struct set
   template <>
   struct value_parser<samples_setting>
   {
-    static constexpr auto rule = dsl::p<parsed_decimal>;
-    static constexpr auto value = lexy::construct<samples_setting>;
+    static constexpr auto rule = dsl::p<parsed_decimal> + dsl::opt(dsl::p<parsed_decimal>);
+    static constexpr auto value = lexy::callback<samples_setting>(
+        [](float v, lexy::nullopt) { return samples_setting(v, v); },
+        [](float v1, float v2) { return samples_setting(v1, v2); });
   };
 
   template <>

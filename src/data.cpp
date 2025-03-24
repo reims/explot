@@ -2,7 +2,6 @@
 #include "gl-handle.hpp"
 #include <fmt/ranges.h>
 #include "csv.hpp"
-#include <charconv>
 #include <array>
 #include "settings.hpp"
 #include "overload.hpp"
@@ -13,6 +12,16 @@
 #include "program.hpp"
 #include <unordered_map>
 #include <utility>
+#include <algorithm>
+
+/*
+datafile
+ matrix -> grid
+ otherwise -> non-grid
+function
+ with isolines -> non-grid
+ otherwise -> grid
+ */
 
 using namespace std::literals;
 
@@ -215,7 +224,7 @@ void  main()
   return make_program_with_varying(shader_source.c_str(), "v");
 }
 
-program_handle program_for_functional_data_3d_x(const expr &e)
+program_handle program_for_functional_data_3d_y(const expr &e)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
 
@@ -240,7 +249,7 @@ void  main()
   return make_program_with_varying(shader_source.c_str(), "v");
 }
 
-program_handle program_for_functional_data_3d_y(const expr &e)
+program_handle program_for_functional_data_3d_x(const expr &e)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
 
@@ -265,7 +274,7 @@ void  main()
   return make_program_with_varying(shader_source.c_str(), "v");
 }
 
-program_handle program_for_parametric_data_3d_u(const expr &x_expr, const expr &y_expr,
+program_handle program_for_parametric_data_3d_v(const expr &x_expr, const expr &y_expr,
                                                 const expr &z_expr)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
@@ -295,7 +304,7 @@ void  main()
   return make_program_with_varying(shader_source.c_str(), "p");
 }
 
-program_handle program_for_parametric_data_3d_v(const expr &x_expr, const expr &y_expr,
+program_handle program_for_parametric_data_3d_u(const expr &x_expr, const expr &y_expr,
                                                 const expr &z_expr)
 {
   static constexpr auto shader_source_fmt = R"shader(#version 330 core
@@ -516,8 +525,6 @@ data_desc data_for_expression_3d(const expr &expr, samples_setting isosamples,
   auto max_y = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
                           yrange.upper_bound.value_or(10.0f));
   assert(min_x < max_x && min_y < max_y);
-  // necessary, because data_desc only handles one segment size for all
-  assert(samples.x == samples.y);
   auto program_x = program_for_functional_data_3d_x(expr);
   auto program_y = program_for_functional_data_3d_y(expr);
   glUseProgram(program_x);
@@ -537,23 +544,27 @@ data_desc data_for_expression_3d(const expr &expr, samples_setting isosamples,
   glBeginTransformFeedback(GL_POINTS);
   glUniform1i(glGetUniformLocation(program_x, "num_points_per_line"), samples.x);
   glUniform1f(glGetUniformLocation(program_x, "min_x"), min_x);
-  glUniform1f(glGetUniformLocation(program_x, "step_x"), line_step_x);
+  glUniform1f(glGetUniformLocation(program_x, "step_x"), point_step_x);
   glUniform1f(glGetUniformLocation(program_x, "min_y"), min_y);
-  glUniform1f(glGetUniformLocation(program_x, "step_y"), point_step_y);
+  glUniform1f(glGetUniformLocation(program_x, "step_y"), line_step_y);
   glDrawArrays(GL_POINTS, 0, num_points_x);
   glEndTransformFeedback();
   glUseProgram(program_y);
   glUniform1i(glGetUniformLocation(program_y, "num_points_per_line"), samples.y);
   glUniform1f(glGetUniformLocation(program_y, "min_x"), min_x);
-  glUniform1f(glGetUniformLocation(program_y, "step_x"), point_step_x);
+  glUniform1f(glGetUniformLocation(program_y, "step_x"), line_step_x);
   glUniform1f(glGetUniformLocation(program_y, "min_y"), min_y);
-  glUniform1f(glGetUniformLocation(program_y, "step_y"), line_step_y);
+  glUniform1f(glGetUniformLocation(program_y, "step_y"), point_step_y);
   glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo, num_points_x * sizeof(glm::vec3),
                     num_points_y * sizeof(glm::vec3));
   glBeginTransformFeedback(GL_POINTS);
   glDrawArrays(GL_POINTS, 0, num_points_y);
   glEndTransformFeedback();
-  return data_desc(std::move(vbo), 3, num_points, isosamples.x + isosamples.y);
+  auto count = std::vector<GLsizei>();
+  count.reserve(isosamples.x + isosamples.y);
+  std::fill_n(std::back_inserter(count), isosamples.y, samples.x);
+  std::fill_n(std::back_inserter(count), isosamples.x, samples.y);
+  return data_desc(std::move(vbo), 3, std::move(count));
 }
 
 data_desc data_for_parametric_3d(const expr &x_expr, const expr &y_expr, const expr &z_expr,
@@ -569,8 +580,6 @@ data_desc data_for_parametric_3d(const expr &x_expr, const expr &y_expr, const e
   auto max_v = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
                           v_range.upper_bound.value_or(10.0f));
   assert(min_u < max_u && min_v < max_v);
-  // necessary, because data_desc only handles one segment size for all
-  assert(samples.x == samples.y);
   auto program_x = program_for_parametric_data_3d_u(x_expr, y_expr, z_expr);
   auto program_y = program_for_parametric_data_3d_v(x_expr, y_expr, z_expr);
   glUseProgram(program_x);
@@ -590,23 +599,27 @@ data_desc data_for_parametric_3d(const expr &x_expr, const expr &y_expr, const e
   glBeginTransformFeedback(GL_POINTS);
   glUniform1i(glGetUniformLocation(program_x, "num_points_per_line"), samples.x);
   glUniform1f(glGetUniformLocation(program_x, "min_u"), min_u);
-  glUniform1f(glGetUniformLocation(program_x, "step_u"), line_step_u);
+  glUniform1f(glGetUniformLocation(program_x, "step_u"), point_step_u);
   glUniform1f(glGetUniformLocation(program_x, "min_v"), min_v);
-  glUniform1f(glGetUniformLocation(program_x, "step_v"), point_step_v);
+  glUniform1f(glGetUniformLocation(program_x, "step_v"), line_step_v);
   glDrawArrays(GL_POINTS, 0, num_points_u);
   glEndTransformFeedback();
   glUseProgram(program_y);
   glUniform1i(glGetUniformLocation(program_y, "num_points_per_line"), samples.y);
   glUniform1f(glGetUniformLocation(program_y, "min_u"), min_u);
-  glUniform1f(glGetUniformLocation(program_y, "step_u"), point_step_u);
+  glUniform1f(glGetUniformLocation(program_y, "step_u"), line_step_u);
   glUniform1f(glGetUniformLocation(program_y, "min_v"), min_v);
-  glUniform1f(glGetUniformLocation(program_y, "step_v"), line_step_v);
+  glUniform1f(glGetUniformLocation(program_y, "step_v"), point_step_v);
   glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo, num_points_u * sizeof(glm::vec3),
                     num_points_v * sizeof(glm::vec3));
   glBeginTransformFeedback(GL_POINTS);
   glDrawArrays(GL_POINTS, 0, num_points_v);
   glEndTransformFeedback();
-  return data_desc(std::move(vbo), 3, num_points, isosamples.x + isosamples.y);
+  auto count = std::vector<GLsizei>();
+  count.reserve(isosamples.x + isosamples.y);
+  std::fill_n(std::back_inserter(count), isosamples.y, samples.x);
+  std::fill_n(std::back_inserter(count), isosamples.x, samples.y);
+  return data_desc(std::move(vbo), 3, std::move(count));
 }
 
 } // namespace
@@ -633,28 +646,35 @@ data_desc data_for_span(std::span<const glm::vec3> data)
 
 data_desc::data_desc(vbo_handle vbo, std::uint32_t point_size, std::uint32_t num_points,
                      std::uint32_t num_segments)
-    : vbo(std::move(vbo)), num_points(num_points), num_segments(num_segments),
-      point_size(point_size)
+    : data_desc(std::move(vbo), point_size,
+                std::vector<GLsizei>(num_segments, num_points / num_segments))
 {
   assert(num_points % num_segments == 0);
 }
 
-void print_data(const data_desc &data)
+data_desc::data_desc(vbo_handle vbo, std::uint32_t point_size, std::vector<GLsizei> count)
+    : vbo(std::move(vbo)), ebo(make_vbo()),
+      num_points(std::ranges::fold_left(count, 0ul, std::plus<GLsizei>())), point_size(point_size),
+      count(std::move(count))
 {
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
-  auto vs = static_cast<const glm::vec3 *>(glMapBuffer(GL_ARRAY_BUFFER, GL_READ_ONLY));
-  auto points_per_segment = data.num_points / data.num_segments;
-  for (auto i = 0u; i < data.num_segments; ++i)
+  starts.reserve(this->count.size());
+  auto start = intptr_t(0);
+  for (const auto &c : this->count)
   {
-    for (auto j = 0u; j < points_per_segment; ++j)
-    {
-      const auto &v = vs[i * points_per_segment + j];
-      fmt::print("({}, {}, {}) ", v.x, v.y, v.z);
-    }
-    fmt::print("\n");
+    starts.push_back(start * sizeof(GLuint));
+    start += c;
   }
-  glUnmapBuffer(GL_ARRAY_BUFFER);
+  glBindVertexArray(0);
+  auto indices = std::make_unique_for_overwrite<GLuint[]>(num_points);
+  for (auto i = 0u; i < num_points; ++i)
+  {
+    indices[i] = i;
+  }
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, num_points * sizeof(GLuint), indices.get(), GL_STATIC_DRAW);
 }
+
+void print_data(const data_desc &data) {}
 
 std::pair<std::vector<data_desc>, time_point> data_for_plot(const plot_command_2d &plot)
 {
@@ -668,7 +688,8 @@ std::pair<std::vector<data_desc>, time_point> data_for_plot(const plot_command_2
           {
             return std::visit(
                 overload(
-                    [&](const expr &expr) {
+                    [&](const expr &expr)
+                    {
                       return data_for_expression_2d(g.mark, expr, settings::samples().x,
                                                     plot.x_range);
                     },
@@ -734,13 +755,13 @@ data_desc reshape(data_desc d, std::uint32_t new_point_size)
     assert(new_point_size % d.point_size == 0);
     const auto factor = new_point_size / d.point_size;
     assert(d.num_points % factor == 0);
-    return data_desc(std::move(d.vbo), new_point_size, d.num_points / factor, d.num_segments);
+    return data_desc(std::move(d.vbo), new_point_size, d.num_points / factor, d.count.size());
   }
   else
   {
     assert(d.point_size % new_point_size == 0);
     const auto factor = d.point_size / new_point_size;
-    return data_desc(std::move(d.vbo), new_point_size, d.num_points * factor, d.num_segments);
+    return data_desc(std::move(d.vbo), new_point_size, d.num_points * factor, d.count.size());
   }
 }
 
