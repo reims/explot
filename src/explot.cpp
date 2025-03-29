@@ -209,7 +209,7 @@ int main()
     }
     else
     {
-      fmt::print("unknown command\n");
+      fmt::println("error: {}", cmd.error());
     }
   }
 

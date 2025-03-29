@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <utility>
 #include <algorithm>
+#include <map>
 
 /*
 datafile
@@ -28,56 +29,6 @@ using namespace std::literals;
 namespace
 {
 using namespace explot;
-
-std::vector<expr> add_defaults(mark_type_2d mark, std::span<const expr> exprs, expr default_expr)
-{
-  assert(!exprs.empty());
-  switch (mark)
-  {
-  case mark_type_2d::lines:
-  case mark_type_2d::points:
-    if (exprs.size() == 1)
-    {
-      return {default_expr, exprs[0]};
-    }
-    else
-    {
-      return {exprs[0], exprs[1]};
-    }
-  case mark_type_2d::impulses:
-    if (exprs.size() == 1)
-    {
-      return {default_expr, literal_expr(0.0f), default_expr, exprs[0]};
-    }
-    else
-    {
-      return {exprs[0], literal_expr(0.0f), exprs[0], exprs[1]};
-    }
-  }
-}
-
-std::vector<expr> add_defaults(mark_type_3d mark, std::span<const expr> exprs, expr default_expr1,
-                               std::optional<expr> default_expr2 = std::nullopt)
-{
-  assert(!exprs.empty());
-  switch (mark)
-  {
-  case mark_type_3d::lines:
-  case mark_type_3d::points:
-    if (exprs.size() == 1)
-    {
-      return {default_expr1, default_expr2.value_or(default_expr1), exprs[0]};
-    }
-    else if (exprs.size() == 2)
-    {
-      return {default_expr1, exprs[0], exprs[1]};
-    }
-    else
-    {
-      return {exprs[0], exprs[1], exprs[2]};
-    }
-  }
-}
 
 std::string to_glsl(const expr &e, std::span<const int> indices = {})
 {
@@ -377,15 +328,58 @@ std::vector<int> extract_indices(std::span<const expr> expressions)
   return indices;
 }
 
+std::vector<int> grid_indices_for_lines(uint32_t num_points, uint32_t num_columns)
+{
+  assert(num_points % num_columns == 0);
+  auto num_rows = num_points / num_columns;
+  auto result = std::vector<int>();
+  result.reserve(2 * num_points);
+
+  for (auto col = 0u; col < num_columns; ++col)
+  {
+    for (auto row = 0u; row < num_rows; ++row)
+    {
+      result.push_back(row * num_columns + col);
+    }
+  }
+
+  for (auto row = 0u; row < num_rows; ++row)
+  {
+    for (auto col = 0u; col < num_columns; ++col)
+    {
+      result.push_back(row * num_columns + col);
+    }
+  }
+
+  return result;
+}
+
+data_desc grid_data_for_lines(vbo_handle vbo, uint32_t num_points, uint32_t num_columns)
+{
+  auto indices = grid_indices_for_lines(num_points, num_columns);
+  auto ebo = make_vbo();
+  glBindVertexArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, ebo);
+  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
+  assert(num_points % num_columns == 0);
+  auto num_rows = num_points / num_columns;
+  auto count = std::vector<GLsizei>();
+  count.reserve(num_columns + num_rows);
+  std::fill_n(std::back_inserter(count), num_columns, num_rows);
+  std::fill_n(std::back_inserter(count), num_rows, num_columns);
+  return data_desc(std::move(vbo), 3, std::move(count), std::move(ebo), num_points);
+}
+
 struct row_data
 {
   std::string filename;
+  std::optional<uint32_t> columns;
   std::vector<int> indices;
   data_desc data;
 };
 
-template <typename T>
-std::pair<std::vector<row_data>, time_point> row_data_for_graphs(const T &gs)
+std::pair<std::vector<row_data>, time_point>
+row_data_for_graphs(const std::span<const graph_desc_2d> gs)
 {
   auto files = std::unordered_map<std::string_view, std::vector<int>>();
   for (const auto &g : gs)
@@ -397,7 +391,6 @@ std::pair<std::vector<row_data>, time_point> row_data_for_graphs(const T &gs)
     else
     {
       const auto &d = std::get<1>(g.data);
-      // auto exprs = add_defaults(g.mark, d.expressions, data_ref{0});
       auto &indices = files[d.path];
       auto new_indices = extract_indices(d.expressions);
       indices.reserve(indices.size() + new_indices.size());
@@ -425,13 +418,85 @@ std::pair<std::vector<row_data>, time_point> row_data_for_graphs(const T &gs)
       glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
       glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
     }
-    result.emplace_back(std::string(f), std::move(indices),
+    result.emplace_back(std::string(f), std::nullopt, std::move(indices),
                         data_desc(std::move(csv_vbo), std::max(1UL, indices.size()), num_points));
   }
   return std::make_pair(std::move(result), timebase.value_or(time_point()));
 }
 
-data_desc data_for_using_expressions(std::span<const expr> exprs, const row_data &r)
+std::pair<std::vector<row_data>, time_point>
+row_data_for_graphs(const std::span<const graph_desc_3d> gs)
+{
+  // using ordered map, because there is no std::hash for tuple or pair
+  auto files = std::map<std::tuple<std::string_view, bool>, std::vector<int>>();
+  for (const auto &g : gs)
+  {
+    if (g.data.index() != 1)
+    {
+      continue;
+    }
+    else
+    {
+      const auto &d = std::get<1>(g.data);
+      auto &indices = files[{d.path, d.matrix}];
+      auto new_indices = extract_indices(d.expressions);
+      indices.reserve(indices.size() + new_indices.size());
+      std::ranges::copy(new_indices, std::back_inserter(indices));
+    }
+  }
+
+  auto result = std::vector<row_data>();
+  result.reserve(files.size());
+  auto timebase = std::optional<time_point>();
+  for (auto &[p, indices] : files)
+  {
+    auto &[f, matrix] = p;
+    std::ranges::sort(indices);
+    indices.erase(std::ranges::unique(indices).begin(), indices.end());
+    auto num_indices = indices.size();
+    if (matrix)
+    {
+      auto [data, columns] = read_matrix_csv(f, settings::datafile::separator(), timebase);
+      assert(data.size() % 3 == 0);
+      auto num_points = data.size() / 3;
+      assert(num_points % columns == 0);
+      auto csv_vbo = make_vbo();
+      glBindVertexArray(0);
+      glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
+      glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
+      result.emplace_back(std::string(f), columns, std::move(indices),
+                          data_desc(std::move(csv_vbo), 3, num_points));
+    }
+    else
+    {
+      auto data = [&]
+      {
+        if (num_indices == 0)
+        {
+          return std::vector<float>();
+        }
+        else
+        {
+          return read_csv(f, settings::datafile::separator(), indices, timebase);
+        }
+      }();
+      assert(data.size() % num_indices == 0);
+      auto num_points = num_indices > 0 ? data.size() / num_indices : count_lines(f);
+      auto csv_vbo = make_vbo();
+      if (num_indices > 0)
+      {
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
+        glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
+      }
+      result.emplace_back(std::string(f), std::nullopt, std::move(indices),
+                          data_desc(std::move(csv_vbo), std::max(1UL, num_indices), num_points));
+    }
+  }
+  return std::make_pair(std::move(result), timebase.value_or(time_point()));
+}
+
+vbo_handle data_for_using_expressions(std::span<const expr> exprs, const row_data &r)
 {
   const auto num_indices = r.indices.size();
   const auto num_points = r.data.num_points;
@@ -455,10 +520,10 @@ data_desc data_for_using_expressions(std::span<const expr> exprs, const row_data
   glBeginTransformFeedback(GL_POINTS);
   glDrawArrays(GL_POINTS, 0, num_points);
   glEndTransformFeedback();
-  return data_desc(std::move(data_vbo), exprs.size(), num_points);
+  return data_vbo;
 }
 
-data_desc data_for_expression_2d(mark_type_2d m, const expr &expr, std::size_t num_points,
+data_desc data_for_expression_2d(mark_type_2d m, const expr &e, std::size_t num_points,
                                  range_setting xrange)
 {
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
@@ -467,7 +532,7 @@ data_desc data_for_expression_2d(mark_type_2d m, const expr &expr, std::size_t n
                           xrange.upper_bound.value_or(10.0f));
   const auto step_x = (max_x - min_x) / (num_points - 1);
   auto vao = make_vao();
-  auto exprs = add_defaults(m, {&expr, 1}, var_or_call("x"));
+  auto exprs = std::vector<expr>{var_or_call("x"), e};
   auto program = program_for_functional_data_2d(exprs);
   auto vbo = make_vbo();
   glBindVertexArray(vao);
@@ -654,8 +719,8 @@ data_desc::data_desc(vbo_handle vbo, std::uint32_t point_size, std::uint32_t num
 
 data_desc::data_desc(vbo_handle vbo, std::uint32_t point_size, std::vector<GLsizei> count)
     : vbo(std::move(vbo)), ebo(make_vbo()),
-      num_points(std::ranges::fold_left(count, 0ul, std::plus<GLsizei>())), point_size(point_size),
-      count(std::move(count))
+      num_points(std::ranges::fold_left(count, 0ul, std::plus<GLsizei>())), num_indices(num_points),
+      point_size(point_size), count(std::move(count))
 {
   starts.reserve(this->count.size());
   auto start = intptr_t(0);
@@ -672,6 +737,20 @@ data_desc::data_desc(vbo_handle vbo, std::uint32_t point_size, std::vector<GLsiz
   }
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, num_points * sizeof(GLuint), indices.get(), GL_STATIC_DRAW);
+}
+
+data_desc::data_desc(vbo_handle vbo, uint32_t point_size, std::vector<GLsizei> count,
+                     vbo_handle ebo, uint32_t num_points)
+    : vbo(std::move(vbo)), ebo(std::move(ebo)), num_points(num_points),
+      num_indices(std::ranges::fold_left(count, 0ul, std::plus<GLsizei>())), count(std::move(count))
+{
+  starts.reserve(this->count.size());
+  auto start = intptr_t(0);
+  for (const auto &c : this->count)
+  {
+    starts.push_back(start * sizeof(GLuint));
+    start += c;
+  }
 }
 
 void print_data(const data_desc &data) {}
@@ -695,10 +774,10 @@ std::pair<std::vector<data_desc>, time_point> data_for_plot(const plot_command_2
                     },
                     [&](const csv_data &c)
                     {
-                      return data_for_using_expressions(
-                          add_defaults(g.mark, c.expressions, data_ref{0}),
-                          *std::ranges::find_if(row_data, [&](const struct row_data &r)
-                                                { return r.filename == c.path; }));
+                      auto &rd = *std::ranges::find_if(row_data, [&](const struct row_data &r)
+                                                       { return r.filename == c.path; });
+                      auto vbo = data_for_using_expressions(c.expressions, rd);
+                      return data_desc(std::move(vbo), 2, rd.data.num_points);
                     },
                     [&](const parametric_data_2d &c)
                     {
@@ -731,10 +810,18 @@ std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
                     },
                     [&](const csv_data &c)
                     {
-                      return data_for_using_expressions(
-                          c.expressions,
-                          *std::ranges::find_if(row_data, [&](const struct row_data &r)
-                                                { return r.filename == c.path; }));
+                      auto &rd = *std::ranges::find_if(
+                          row_data, [&](const struct row_data &r)
+                          { return r.filename == c.path && r.columns.has_value() == c.matrix; });
+                      auto vbo = data_for_using_expressions(c.expressions, rd);
+                      if (rd.columns.has_value() && g.mark == mark_type_3d::lines)
+                      {
+                        return grid_data_for_lines(std::move(vbo), rd.data.num_points, *rd.columns);
+                      }
+                      else
+                      {
+                        return data_desc(std::move(vbo), 3, rd.data.count);
+                      }
                     },
                     [&](const parametric_data_3d &c)
                     {

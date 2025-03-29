@@ -13,6 +13,7 @@ struct data_desc final
   vbo_handle vbo;
   vbo_handle ebo;
   std::uint32_t num_points;
+  std::uint32_t num_indices;
   std::uint32_t point_size;
   std::vector<uintptr_t> starts;
   std::vector<GLsizei> count;
@@ -21,6 +22,8 @@ struct data_desc final
   data_desc(vbo_handle vbo, std::uint32_t point_size, std::uint32_t num_points,
             std::uint32_t num_segments = 1);
   data_desc(vbo_handle vbo, std::uint32_t point_size, std::vector<GLsizei> count);
+  data_desc(vbo_handle vbo, uint32_t point_size, std::vector<GLsizei> count, vbo_handle ebo,
+            uint32_t num_points);
   data_desc &operator=(data_desc &&) = default;
 };
 

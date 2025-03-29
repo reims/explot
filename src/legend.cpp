@@ -103,23 +103,24 @@ void draw(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip)
       l.titles, [](const gl_string &s) { return s.upper_bounds.x - s.lower_bounds.x; }));
   const auto text_height = std::ranges::max(std::views::transform(
       l.titles, [](const gl_string &s) { return s.upper_bounds.y - s.lower_bounds.y; }));
-  const auto start_of_mark = screen.upper_bounds.x - text_width - 20.f;
+  const auto start_of_mark = screen.upper_bounds.x - text_width - 30.f;
   assert(l.titles.size() == l.marks.size());
   for (auto i = 0u; i < l.titles.size(); ++i)
   {
     const auto &m = l.marks[i];
     const auto &s = l.titles[i];
     const auto screen_rect = rect{
-        .lower_bounds = {start_of_mark, screen.upper_bounds.y - (i + 1) * text_height, -1.0f},
-        .upper_bounds = {start_of_mark + 20.0f, screen.upper_bounds.y - i * text_height, 1.0f}};
+        .lower_bounds = {start_of_mark, screen.upper_bounds.y - (i + 1) * text_height - 10, -1.0f},
+        .upper_bounds = {start_of_mark + 20.0f, screen.upper_bounds.y - i * text_height - 10,
+                         1.0f}};
     const auto view_to_screen = transform(clip_rect, screen_rect);
     std::visit(overload([&](const points_2d_state &p)
-                        { draw(p, 1.0f, 5.0f, l.colors[i], view_to_screen, screen_to_clip); },
+                        { draw(p, 1.0f, 9.0f, l.colors[i], view_to_screen, screen_to_clip); },
                         [&](const lines_state_2d &ls)
                         { draw(ls, 1.0f, view_to_screen, screen_to_clip, l.colors[i]); }),
                m);
-    draw(s, screen_to_clip, {start_of_mark + 20.0f - 200, screen_rect.lower_bounds.y - 200},
-         text_color, {0.0f, 1.0f});
+    draw(s, screen_to_clip, {start_of_mark + 20, screen_rect.upper_bounds.y}, text_color,
+         {0.0f, 1.0f});
     // draw(l.font, screen_to_clip, {500, 500});
   }
 }

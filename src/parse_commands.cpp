@@ -413,10 +413,13 @@ struct title
 
 struct csv_data_
 {
-  static constexpr auto rule = dsl::p<string> + dsl::p<usingp>;
+  static constexpr auto rule =
+      dsl::p<string> + dsl::opt(LEXY_KEYWORD("matrix", kw_id)) + dsl::p<usingp>;
   static constexpr auto value =
-      lexy::callback<csv_data>([](std::string path, std::vector<expr> exprs)
-                               { return csv_data{std::move(path), std::move(exprs)}; });
+      lexy::callback<csv_data>([](std::string path, lexy::nullopt, std::vector<expr> exprs)
+                               { return csv_data{std::move(path), std::move(exprs), false}; },
+                               [](std::string path, std::vector<expr> exprs)
+                               { return csv_data{std::move(path), std::move(exprs), true}; });
 };
 
 constexpr auto graph_list_2d = lexy::fold_inplace<std::vector<graph_desc_2d>>(
@@ -906,11 +909,210 @@ struct set
 };
 } // namespace r
 
+std::expected<csv_data, std::string> validate(mark_type_3d, csv_data data)
+{
+  switch (data.expressions.size())
+  {
+  case 0:
+    if (data.matrix)
+    {
+      data.expressions = {data_ref(1), data_ref(2), data_ref(3)};
+    }
+    else
+    {
+      data.expressions = {data_ref(0), literal_expr(0.0f), data_ref(1)};
+    }
+    break;
+  case 1:
+    if (data.matrix)
+    {
+      data.expressions = {data_ref(1), data_ref(2), std::move(data.expressions[0])};
+    }
+    else
+    {
+      data.expressions = {data_ref(0), literal_expr(0.0f), std::move(data.expressions[0])};
+    }
+    break;
+  case 3:
+    break;
+  default:
+    return std::unexpected("need 1 or 3 expressions for splot");
+  }
+  return {std::move(data)};
+}
+
+std::expected<csv_data, std::string> validate(mark_type_2d mark, csv_data data)
+{
+  if (mark == mark_type_2d::impulses)
+  {
+    switch (data.expressions.size())
+    {
+    case 0:
+      data.expressions = {data_ref(0), literal_expr(0.0f), data_ref(0), data_ref(1)};
+      break;
+    case 1:
+      data.expressions = {data_ref(0), literal_expr(0.0f), data_ref(0),
+                          std::move(data.expressions[0])};
+      break;
+    case 2:
+      data.expressions = {data.expressions[0], literal_expr(0.0f), data.expressions[0],
+                          std::move(data.expressions[1])};
+    case 4:
+      break;
+    default:
+      return std::unexpected("need 1, 2 or 4 expressions for plot with impulses");
+    }
+  }
+  else
+  {
+    switch (data.expressions.size())
+    {
+    case 0:
+      if (data.matrix)
+      {
+        data.expressions = {data_ref(1), data_ref(2)};
+      }
+      else
+      {
+        data.expressions = {data_ref(0), data_ref(1)};
+      }
+      break;
+    case 1:
+      if (data.matrix)
+      {
+        data.expressions = {data_ref(1), std::move(data.expressions[0])};
+      }
+      else
+      {
+        data.expressions = {data_ref(0), std::move(data.expressions[0])};
+      }
+      break;
+    case 2:
+      break;
+    default:
+      return std::unexpected("need 1 or 2 expressions for plot with lines or points");
+    }
+  }
+  return {std::move(data)};
+}
+
+std::expected<expr, std::string> validate(mark_type_2d mark, expr e)
+{
+  // TODO: check that e is valid
+  return {std::move(e)};
+}
+
+std::expected<expr, std::string> validate(mark_type_3d, expr e)
+{
+  // TODO: check that e is valid
+  return {std::move(e)};
+}
+
+std::expected<parametric_data_2d, std::string> validate(mark_type_2d m, parametric_data_2d data)
+{
+  // TODO: check that expressions are valid
+  // TODO: implement impulses
+  if (m == mark_type_2d::impulses)
+  {
+    return std::unexpected("impulses for parametric plots is not implemented yet.");
+  }
+  else
+  {
+    return {std::move(data)};
+  }
+}
+
+std::expected<parametric_data_3d, std::string> validate(mark_type_3d, parametric_data_3d data)
+{
+  // TODO: check that expressions are valid
+  return {std::move(data)};
+}
+
+std::expected<graph_desc_2d, std::string> validate(graph_desc_2d graph)
+{
+  auto data = std::visit([&](auto &&d) -> std::expected<data_source_2d, std::string>
+                         { return validate(graph.mark, std::move(d)); }, std::move(graph.data));
+  return std::move(data).transform(
+      [&](data_source_2d &&d)
+      {
+        graph.data = std::move(d);
+        return graph;
+      });
+}
+
+std::expected<graph_desc_3d, std::string> validate(graph_desc_3d graph)
+{
+  auto data = std::visit([&](auto &&d) -> std::expected<data_source_3d, std::string>
+                         { return validate(graph.mark, std::move(d)); }, std::move(graph.data));
+  return std::move(data).transform(
+      [&](data_source_3d &&d)
+      {
+        graph.data = std::move(d);
+        return graph;
+      });
+}
+
+auto validate_all(std::ranges::range auto r)
+{
+  using exp = std::ranges::range_value_t<decltype(r)>;
+  using value = exp::value_type;
+  using error = exp::error_type;
+  auto result = std::expected<std::vector<value>, error>();
+  for (auto &&e : r)
+  {
+    if (e.has_value())
+    {
+      result.value().push_back(std::move(e.value()));
+    }
+    else
+    {
+      result = std::unexpected(std::move(e.error()));
+    }
+  }
+  return result;
+}
+
+std::expected<plot_command_2d, std::string> validate(plot_command_2d plot)
+{
+  namespace views = std::ranges::views;
+  auto ogs = std::ranges::subrange(std::make_move_iterator(plot.graphs.begin()),
+                                   std::make_move_iterator(plot.graphs.end()));
+  auto gs = validate_all(
+      ogs | views::transform([](graph_desc_2d &&g) { return validate(std::move(g)); }));
+  if (gs.has_value())
+  {
+    plot.graphs = std::move(gs.value());
+  }
+  else
+  {
+    return std::unexpected(gs.error());
+  }
+  return plot;
+}
+
+std::expected<plot_command_3d, std::string> validate(plot_command_3d plot)
+{
+  namespace views = std::ranges::views;
+  auto ogs = std::ranges::subrange(std::make_move_iterator(plot.graphs.begin()),
+                                   std::make_move_iterator(plot.graphs.end()));
+  auto gs = validate_all(
+      ogs | views::transform([](graph_desc_3d &&g) { return validate(std::move(g)); }));
+  if (gs.has_value())
+  {
+    plot.graphs = std::move(gs.value());
+  }
+  else
+  {
+    return std::unexpected(std::move(gs.error()));
+  }
+  return plot;
+}
+
 } // namespace
 
 namespace explot
 {
-std::optional<command> parse_command(const char *cmd)
+std::expected<command, std::string> parse_command(const char *cmd)
 {
   auto line = std::string_view(cmd);
   auto input = lexy::string_input<lexy::utf8_char_encoding>(line.begin(), line.end());
@@ -927,7 +1129,7 @@ std::optional<command> parse_command(const char *cmd)
     }
     else
     {
-      return std::nullopt;
+      return std::unexpected("invalid show command");
     }
   }
   else if (line.starts_with("unset "))
@@ -939,7 +1141,7 @@ std::optional<command> parse_command(const char *cmd)
     }
     else
     {
-      return std::nullopt;
+      return std::unexpected("invalid unset command");
     }
   }
   else if (line.starts_with("set "))
@@ -951,7 +1153,7 @@ std::optional<command> parse_command(const char *cmd)
     }
     else
     {
-      return std::nullopt;
+      return std::unexpected("invalid set command");
     }
   }
   else if (line.starts_with("plot "))
@@ -961,11 +1163,11 @@ std::optional<command> parse_command(const char *cmd)
                        : lexy::parse<r::plot>(input, lexy_ext::report_error);
     if (matched.is_success())
     {
-      return matched.value();
+      return validate(std::move(matched.value()));
     }
     else
     {
-      return std::nullopt;
+      return std::unexpected("invalid plot command");
     }
   }
   else if (line.starts_with("splot"))
@@ -975,16 +1177,16 @@ std::optional<command> parse_command(const char *cmd)
                        : lexy::parse<r::splot>(input, lexy_ext::report_error);
     if (matched.is_success())
     {
-      return matched.value();
+      return validate(std::move(matched.value()));
     }
     else
     {
-      return std::nullopt;
+      return std::unexpected("invalid splot command");
     }
   }
   else
   {
-    return std::nullopt;
+    return std::unexpected("unknown command");
   }
 }
 

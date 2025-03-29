@@ -71,6 +71,7 @@ struct csv_data final
 {
   std::string path;
   std::vector<expr> expressions;
+  bool matrix;
 };
 
 struct parametric_data_2d final
