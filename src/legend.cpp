@@ -15,14 +15,16 @@ using namespace explot;
 
 std::string glyphs_for_graphs(std::span<const graph_desc_2d> graphs)
 {
-  auto glyphs = std::unordered_set<char>();
+  auto glyphs = std::string();
   for (const auto &g : graphs)
   {
-    glyphs.insert(g.title.begin(), g.title.end());
+    glyphs.append(g.title.begin(), g.title.end());
   }
-  auto str = std::string(glyphs.begin(), glyphs.end());
-  str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
-  return str;
+  std::ranges::sort(glyphs);
+  glyphs.erase(std::unique(glyphs.begin(), glyphs.end()), glyphs.end());
+  // str.erase(std::remove(str.begin(), str.end(), ' ')
+
+  return glyphs;
 }
 
 std::string glyphs_for_graphs(std::span<const graph_desc_3d> graphs)
@@ -55,7 +57,7 @@ namespace explot
 {
 
 legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs), 12).value())
+    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
   int i = 0;
   for (const auto &g : graphs)
@@ -76,7 +78,7 @@ legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type>
 }
 
 legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs), 12).value())
+    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
   int i = 0;
   titles.reserve(graphs.size());

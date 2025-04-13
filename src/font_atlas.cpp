@@ -165,8 +165,6 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
       shapes.reserve(glyphs.size());
       auto glyphs_data = std::vector<glyph_data>();
       glyphs_data.reserve(glyphs.size());
-      //      auto glyphs_dimensions = make_unique_span<std::pair<int, int>>(glyphs.size());
-      //      auto boundss = std::vector<msdfgen::Shape::Bounds>();
       auto width = 0;
       auto height = 0;
       auto error = FT_Set_Char_Size(font.get(), 0, size << 6, 0, 162);
@@ -185,20 +183,27 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
         auto bitmap = (FT_BitmapGlyph)shapes[i].get();
         glyphs_data.emplace_back(glm::vec2(width, 0),
                                  glm::vec2(width + bitmap->bitmap.width, bitmap->bitmap.rows));
+        auto box = FT_BBox{};
+        FT_Glyph_Get_CBox(shapes[i].get(), ft_glyph_bbox_pixels, &box);
+        auto fbox = FT_BBox{};
+        FT_Glyph_Get_CBox(shapes[i].get(), ft_glyph_bbox_gridfit, &fbox);
         width += bitmap->bitmap.width;
         height = std::max(height, static_cast<int>(bitmap->bitmap.rows));
       }
+      // rendered text is garbled, if width is not a multiple of 4
+      // I guess that rounding errors are the reason.
+      // This feels more like a workaround than a fix though
+      if (width & 3)
+      {
+        width += 4 - (width & 3);
+      }
       auto tex_data = std::make_unique<unsigned char[]>(static_cast<std::size_t>(width)
                                                         * static_cast<std::size_t>(height));
-      // std::fill_n(tex_data.get(), width * height, 0);
       auto dims = glm::vec2(width, height);
       auto start_column = 0u;
       for (auto i = 0ULL; i < glyphs.size(); ++i)
       {
         auto bitmap = (FT_BitmapGlyph)shapes[i].get();
-        // fmt::println("width: {} pitch: {}", bitmap->bitmap.width, bitmap->bitmap.pitch);
-        // write_ppm(bitmap->bitmap.buffer, bitmap->bitmap.width, bitmap->bitmap.rows,
-        //          fmt::format("test_{}.ppm", glyphs[i]).c_str());
         for (auto row = 0u; row < bitmap->bitmap.rows; ++row)
         {
           std::memcpy(tex_data.get() + (row * width + start_column),
@@ -207,12 +212,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
                       bitmap->bitmap.width);
         }
         start_column += bitmap->bitmap.width;
-        // glyphs_data[i].uv_lb /= dims;
-        // glyphs_data[i].uv_ub /= dims;
       }
-
-      // write_ppm(tex_data.get(), width, height, fmt::format("atlas_{}.ppm",
-      // glyphs.size()).c_str());
 
       auto tex = make_texture();
       glActiveTexture(GL_TEXTURE0);
@@ -227,7 +227,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
       glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE,
                    tex_data.get());
       glFinish();
-      // glGenerateMipmap(GL_TEXTURE_RECTANGLE);
+
       auto quad = make_tex_vbo();
       auto vao = make_vao();
       glBindVertexArray(vao);
@@ -252,10 +252,6 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
 
 gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
 {
-  // auto temp = std::make_unique<unsigned char[]>(static_cast<size_t>(atlas.dims.x *
-  // atlas.dims.y)); glGetTexImage(GL_TEXTURE_RECTANGLE, 0, GL_RED, GL_UNSIGNED_BYTE, temp.get());
-  // write_ppm(temp.get(), static_cast<size_t>(atlas.dims.x), static_cast<size_t>(atlas.dims.y),
-  // fmt::format("atlas2_{}.ppm", atlas.glyphs.size()).c_str());
   auto vao = make_vao();
   glBindVertexArray(vao);
   auto uv_coordinates = std::make_unique<glm::vec2[]>(2 * str.size());
@@ -267,11 +263,6 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
   auto has_kerning = FT_HAS_KERNING(atlas.font.get());
   for (auto i = 0ULL; i < str.size(); ++i)
   {
-    // if (std::isspace(str[i]))
-    // {
-    //   width += space_width;
-    //   continue;
-    // }
     auto idx = static_cast<std::size_t>(
         std::distance(std::begin(atlas.glyphs),
                       std::find(std::begin(atlas.glyphs), std::end(atlas.glyphs), str[i])));
