@@ -17,7 +17,6 @@
               lldb_15
               cmake
               fmt
-              ctre
               glfw
               glew
               glew.dev

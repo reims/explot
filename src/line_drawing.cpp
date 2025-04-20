@@ -253,7 +253,7 @@ line_strip_state_2d make_line_strip_state_2d(data_desc data)
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
-
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
   state.data = std::move(data);
   return state;
 }

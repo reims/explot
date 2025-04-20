@@ -16,7 +16,8 @@ struct plot_with_view_space
   rx::subjects::behavior<rect> view_space;
 
   explicit plot_with_view_space(plot2d plot)
-      : plot(std::move(plot)), view_space(scale2d(round_for_ticks_2d(plot.phase_space, 5, 2), 1.1))
+      : plot(std::move(plot)),
+        view_space(scale2d(round_for_ticks_2d(plot.phase_space, 5, 2).bounding_rect, 1.1))
   {
   }
 };
@@ -41,7 +42,8 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
              [=](plot_command_2d cmd)
              {
                return rx::scope(
-                          [cmd = std::move(cmd)]() {
+                          [cmd = std::move(cmd)]()
+                          {
                             return rx::resource<plot_with_view_space>(
                                 plot_with_view_space(make_plot2d(cmd)));
                           },
@@ -75,13 +77,15 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                     round_for_ticks_2d(const_get(res).plot.phase_space, 5, 2));
                             auto view_space =
                                 phase_space
-                                | rx::transform([](const rect &r) { return scale2d(r, 1.1f); });
+                                | rx::transform([](const tics_desc &r)
+                                                { return scale2d(r.bounding_rect, 1.1f); });
                             auto sub =
                                 view_space.subscribe(const_get(res).view_space.get_subscriber());
                             auto coordinate_systems =
                                 phase_space | rx::observe_on(on_run_loop)
                                 | rx::transform(
-                                    [timebase = const_get(res).plot.timebase](const rect &r) {
+                                    [timebase = const_get(res).plot.timebase](const tics_desc &r)
+                                    {
                                       return std::make_shared<coordinate_system_2d>(
                                           make_coordinate_system_2d(r, 5, timebase));
                                     });
@@ -91,7 +95,8 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                     [=](auto ds)
                                     {
                                       return rx::scope(
-                                                 []() {
+                                                 []()
+                                                 {
                                                    return rx::resource<drag_render_state>(
                                                        make_drag_render_state());
                                                  },
@@ -184,7 +189,7 @@ rx::observable<rx::observable<unit>> splot_renderer(rx::observe_on_one_worker &o
                                              {
                                                auto dir = glm::transpose(rot)
                                                           * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-                                               draw(const_get(res), -2.0f * glm::vec3(dir), rot,
+                                               draw(const_get(res), -4.0f * glm::vec3(dir), rot,
                                                     screen);
                                                return unit{};
                                              },

@@ -56,6 +56,8 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size);
 
 struct gl_string final
 {
+  gl_string(const font_atlas &atlas, std::string_view str);
+
   std::uint32_t size;
   vao_handle vao;
   vbo_handle uv_coordinates;
@@ -67,7 +69,6 @@ struct gl_string final
   glm::vec2 upper_bounds;
 };
 
-gl_string make_gl_string(const font_atlas &atlas, std::string_view str);
 void draw(const gl_string &str, const glm::mat4 &screen_to_clip, const glm::vec2 &offset,
           const glm::vec4 &color, const glm::vec2 &anchor = {0.0f, 0.0f});
 void draw(const font_atlas &atlas, const glm::mat4 &screen_to_clip, const glm::vec2 &offset);

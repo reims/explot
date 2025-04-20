@@ -1,12 +1,9 @@
 #include "plot2d.hpp"
-#include "gl-handle.hpp"
 #include <GL/glew.h>
 #include <array>
 #include <cmath>
-#include <iostream>
 #include <glm/gtc/type_ptr.hpp>
 #include <cassert>
-#include "colors.hpp"
 #include "minmax.hpp"
 
 namespace
@@ -17,7 +14,8 @@ namespace explot
 {
 plot2d make_plot2d(const plot_command_2d &cmd)
 {
-  auto graphs = make_unique_span<graph2d>(cmd.graphs.size());
+  auto graphs = std::vector<graph2d>();
+  graphs.reserve(cmd.graphs.size());
   auto lts = resolve_line_types(cmd.graphs);
   auto [data, timebase] = data_for_plot(cmd);
   auto bounding = std::optional<rect>();
@@ -25,7 +23,7 @@ plot2d make_plot2d(const plot_command_2d &cmd)
   {
     const auto &g = cmd.graphs[i];
     auto br = bounding_rect_2d(data[i], 2);
-    graphs[i] = graph2d(std::move(data[i]), g.mark, lts[i]);
+    graphs.emplace_back(std::move(data[i]), g.mark, lts[i]);
     bounding = union_rect(bounding.value_or(br), br);
   }
 
@@ -36,10 +34,9 @@ void draw(const plot2d &plot, const rect &screen, const rect &view)
 {
   const auto view_to_screen = transform(view, screen);
   const auto screen_to_clip = transform(screen, clip_rect);
-  assert(plot.graphs.size <= num_graph_colors);
-  for (std::size_t i = 0; i < plot.graphs.size; ++i)
+  for (const auto &g : plot.graphs)
   {
-    draw(plot.graphs[i], view_to_screen, screen_to_clip);
+    draw(g, view_to_screen, screen_to_clip);
   }
   draw(plot.legend, screen, screen_to_clip);
 }

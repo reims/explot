@@ -72,7 +72,7 @@ legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type>
       marks.push_back(make_lines_state_2d(make_line_data()));
       break;
     }
-    titles.push_back(make_gl_string(font, g.title));
+    titles.emplace_back(font, g.title);
     colors.push_back(graph_colors[(i++) % num_graph_colors]);
   }
 }
@@ -94,7 +94,7 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
       marks.push_back(make_lines_state_2d(make_line_data()));
       break;
     }
-    titles.push_back(make_gl_string(font, g.title));
+    titles.emplace_back(font, g.title);
     colors.push_back(lts[i++].color);
   }
 }

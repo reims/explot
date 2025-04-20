@@ -1,6 +1,5 @@
 #include "settings.hpp"
 #include <fmt/format.h>
-#include <ctre.hpp>
 #include "overload.hpp"
 #include "colors.hpp"
 #include <type_traits>

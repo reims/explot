@@ -167,7 +167,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
       glyphs_data.reserve(glyphs.size());
       auto width = 0;
       auto height = 0;
-      auto error = FT_Set_Char_Size(font.get(), 0, size << 6, 0, 162);
+      auto error = FT_Set_Char_Size(font.get(), 0, size << 6, 0, 96);
       if (error)
       {
         fmt::println("error in set char size");
@@ -250,12 +250,13 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
   return std::nullopt;
 }
 
-gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
+gl_string::gl_string(const font_atlas &atlas, std::string_view str)
+    : size(str.size()), vao(make_vao()), uv_coordinates(make_vbo()), screen_coordinates(make_vbo()),
+      tex_vbo(make_tex_vbo()), texture(atlas.texture), program(make_string_program())
 {
-  auto vao = make_vao();
   glBindVertexArray(vao);
-  auto uv_coordinates = std::make_unique<glm::vec2[]>(2 * str.size());
-  auto screen_coordinates = std::make_unique<glm::vec2[]>(2 * str.size());
+  auto uv_coords = std::make_unique<glm::vec2[]>(2 * str.size());
+  auto screen_coords = std::make_unique<glm::vec2[]>(2 * str.size());
   auto width = 0.0f;
   auto y_lower_bound = std::numeric_limits<float>::max();
   auto y_upper_bound = std::numeric_limits<float>::lowest();
@@ -267,13 +268,14 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
         std::distance(std::begin(atlas.glyphs),
                       std::find(std::begin(atlas.glyphs), std::end(atlas.glyphs), str[i])));
     auto glyph_index = FT_Get_Char_Index(atlas.font.get(), str[i]);
-    assert(idx < atlas.glyphs.size() && glyph_index > 0);
+    assert(idx < atlas.glyphs.size());
+    assert(glyph_index > 0);
     auto bitmap = (FT_BitmapGlyph)atlas.ft_glyphs[idx].get();
     const auto &uv_lower_bounds = atlas.data[idx].uv_lb;
     const auto uv_dimensions = atlas.data[idx].uv_ub - atlas.data[idx].uv_lb;
     static_assert(sizeof(glm::vec2) == 2 * sizeof(float));
-    std::memcpy(&uv_coordinates[2 * i], &uv_lower_bounds, sizeof(glm::vec2));
-    std::memcpy(&uv_coordinates[2 * i + 1], &uv_dimensions, sizeof(glm::vec2));
+    std::memcpy(&uv_coords[2 * i], &uv_lower_bounds, sizeof(glm::vec2));
+    std::memcpy(&uv_coords[2 * i + 1], &uv_dimensions, sizeof(glm::vec2));
     if (i > 0 && has_kerning)
     {
       FT_Vector kerning = {0, 0};
@@ -287,23 +289,20 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
     width += bitmap->root.advance.x >> 16;
     y_lower_bound = std::min(y_lower_bound, screen_lower_bounds.y);
     y_upper_bound = std::max(y_upper_bound, screen_lower_bounds.y + screen_dimensions.y);
-    std::memcpy(&screen_coordinates[2 * i], &screen_lower_bounds, sizeof(glm::vec2));
-    std::memcpy(&screen_coordinates[2 * i + 1], &screen_dimensions, sizeof(glm::vec2));
+    std::memcpy(&screen_coords[2 * i], &screen_lower_bounds, sizeof(glm::vec2));
+    std::memcpy(&screen_coords[2 * i + 1], &screen_dimensions, sizeof(glm::vec2));
     previous = glyph_index;
   }
-  auto uv_vbo = make_vbo();
-  glBindBuffer(GL_ARRAY_BUFFER, uv_vbo);
-  glBufferData(GL_ARRAY_BUFFER, 4 * str.size() * sizeof(float), uv_coordinates.get(),
-               GL_STATIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, uv_coordinates);
+  glBufferData(GL_ARRAY_BUFFER, 4 * str.size() * sizeof(float), uv_coords.get(), GL_STATIC_DRAW);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
   glVertexAttribDivisor(0, 1);
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
   glVertexAttribDivisor(1, 1);
   glEnableVertexAttribArray(1);
-  auto screen_vbo = make_vbo();
-  glBindBuffer(GL_ARRAY_BUFFER, screen_vbo);
-  glBufferData(GL_ARRAY_BUFFER, 4 * str.size() * sizeof(float), screen_coordinates.get(),
+  glBindBuffer(GL_ARRAY_BUFFER, screen_coordinates);
+  glBufferData(GL_ARRAY_BUFFER, 4 * str.size() * sizeof(float), screen_coords.get(),
                GL_STATIC_DRAW);
   glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
   glVertexAttribDivisor(2, 1);
@@ -311,19 +310,11 @@ gl_string make_gl_string(const font_atlas &atlas, std::string_view str)
   glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
   glVertexAttribDivisor(3, 1);
   glEnableVertexAttribArray(3);
-  auto tex_vbo = make_tex_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, tex_vbo);
   glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
   glEnableVertexAttribArray(4);
-  return gl_string{.size = static_cast<std::uint32_t>(str.size()),
-                   .vao = std::move(vao),
-                   .uv_coordinates = std::move(uv_vbo),
-                   .screen_coordinates = std::move(screen_vbo),
-                   .tex_vbo = std::move(tex_vbo),
-                   .texture = atlas.texture,
-                   .program = make_string_program(),
-                   .lower_bounds = glm::vec2{0.0f, y_lower_bound},
-                   .upper_bounds = glm::vec2{width, y_upper_bound}};
+  lower_bounds = glm::vec2(0.0f, y_lower_bound);
+  upper_bounds = glm::vec2(width, y_upper_bound);
 }
 
 void draw(const gl_string &str, const glm::mat4 &screen_to_clip, const glm::vec2 &offset,

@@ -64,8 +64,6 @@ find_package(glm REQUIRED)
 find_package(Fontconfig REQUIRED)
 target_link_libraries(explot PRIVATE Fontconfig::Fontconfig)
 
-#target_link_libraries(explot PRIVATE ctre)
-
 target_compile_options(explot  PUBLIC)
 
 target_compile_options(explot PRIVATE -Og -Wpedantic -Werror -Wextra -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-deprecated-declarations -Wno-unused-command-line-argument -stdlib=libc++)

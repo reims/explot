@@ -1,8 +1,7 @@
 #include "rect.hpp"
 #include <glm/ext/matrix_transform.hpp>
-// #include <glm/gtx/string_cast.hpp>
-// #include <iostream>
 #include <algorithm>
+#include <fmt/format.h>
 
 namespace
 {
@@ -10,6 +9,7 @@ struct interval final
 {
   float min;
   float max;
+  int lsd;
 };
 
 auto round_to_ticks(float min, float max, int num_ticks, int digits)
@@ -41,7 +41,7 @@ auto round_to_ticks(float min, float max, int num_ticks, int digits)
   const auto start = std::floor(min / resolution + 1.e-6f) * resolution;
   const auto width =
       std::ceil((max - start) / (num_splits * resolution) + 1.e-6f) * num_splits * resolution;
-  return interval{.min = start, .max = start + width};
+  return interval{.min = start, .max = start + width, .lsd = exp};
 }
 
 } // namespace
@@ -70,21 +70,27 @@ rect transform(const rect &r, const glm::mat4 &m)
           .upper_bounds = m * glm::vec4(r.upper_bounds, 1.0f)};
 }
 
-rect round_for_ticks_2d(const rect &r, int num_ticks, int digits)
+tics_desc round_for_ticks_2d(const rect &r, int num_ticks, int digits)
 {
   const auto interval_x = round_to_ticks(r.lower_bounds.x, r.upper_bounds.x, num_ticks, digits);
   const auto interval_y = round_to_ticks(r.lower_bounds.y, r.upper_bounds.y, num_ticks, digits);
-  return {.lower_bounds = {interval_x.min, interval_y.min, r.lower_bounds.z},
-          .upper_bounds = {interval_x.max, interval_y.max, r.upper_bounds.z}};
+  return {.bounding_rect = {.lower_bounds = {interval_x.min, interval_y.min, r.lower_bounds.z},
+                            .upper_bounds = {interval_x.max, interval_y.max, r.upper_bounds.z}},
+          .least_significant_digit_x = interval_x.lsd,
+          .least_significant_digit_y = interval_y.lsd,
+          .least_significant_digit_z = 0};
 }
 
-rect round_for_ticks_3d(const rect &r, int num_ticks, int digits)
+tics_desc round_for_ticks_3d(const rect &r, int num_ticks, int digits)
 {
   const auto interval_x = round_to_ticks(r.lower_bounds.x, r.upper_bounds.x, num_ticks, digits);
   const auto interval_y = round_to_ticks(r.lower_bounds.y, r.upper_bounds.y, num_ticks, digits);
   const auto interval_z = round_to_ticks(r.lower_bounds.z, r.upper_bounds.z, num_ticks, digits);
-  return {.lower_bounds = {interval_x.min, interval_y.min, interval_z.min},
-          .upper_bounds = {interval_x.max, interval_y.max, interval_z.max}};
+  return {.bounding_rect = {.lower_bounds = {interval_x.min, interval_y.min, interval_z.min},
+                            .upper_bounds = {interval_x.max, interval_y.max, interval_z.max}},
+          .least_significant_digit_x = interval_x.lsd,
+          .least_significant_digit_y = interval_y.lsd,
+          .least_significant_digit_z = interval_z.lsd};
 }
 
 rect union_rect(const rect &r1, const rect &r2)
@@ -96,4 +102,19 @@ rect union_rect(const rect &r1, const rect &r2)
                                std::max(r1.upper_bounds.y, r2.upper_bounds.y),
                                std::max(r1.upper_bounds.z, r2.upper_bounds.z)}};
 }
+
+std::string format_for_tic(float value, int lsd)
+{
+  if (lsd <= 0)
+  {
+    auto tolerance = 0.0001f;
+    for (int i = 0; i < -lsd; ++i)
+    {
+      tolerance /= 10.0f;
+    }
+    value += std::copysign(tolerance, value);
+  }
+  return fmt::format("{:.{}f}", value, std::max(0, -lsd));
+}
+
 } // namespace explot
