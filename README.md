@@ -15,3 +15,37 @@ Start `explot` in a terminal and start plotting.
 If you want to build `explot` without nix, you must make sure that cmake can find all the dependencies. See `flake.nix` for a list of dependencies.
 
 
+## Screenshots
+
+### Plot example
+![`plot sin(x) with lines, cos(x) with lines`](./img/plot_example.png)
+
+### Splot example
+![`splot sin(x/3)*cos(x/3) with lines`](./img/splot_example.png)
+
+## Features
+
+### Gnuplot featues
+
+- [x] Basic commands `plot`, `splot`, `set` and `show`
+- [x] Plotting datafiles, as columns and as a matrix
+- [x] Plotting functions and parametric curves/surfaces
+- [x] Datetime handling
+- Plotting styles:
+  - [x] points
+  - [x] lines
+  - [x] impulses (2d only)
+  - [ ] pm3d
+  - [ ] hiddden3d
+  - [ ] vectors
+  - [ ] error bars
+  
+### Additional features
+
+- [x] Pressing `q` closes plot window
+- [ ] Parameters for expressions that can be changed interactively. They will probably use a syntax like `$p1`, `$p2` etc similar to columns.
+
+### Gnuplot features that are out-of-scope
+
+- Creating images for publication. `gnuplot` is a great tool for that. `explot` is for interactive visualisation. In particluar, `explot` will never support `set output` unless the scope changes.
+  
