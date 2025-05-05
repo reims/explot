@@ -3,6 +3,9 @@
 #include <charconv>
 #include <cassert>
 #include <fmt/format.h>
+// clang 19 implements P1907R1 only partially and the feature flag is missing.
+// the implementation is enough for nttp use in lexy, though
+#define LEXY_HAS_NTTP 1
 #include <lexy/dsl.hpp>
 #include <lexy/callback.hpp>
 #include <lexy/input/string_input.hpp>
@@ -14,6 +17,7 @@
 #include <algorithm>
 #include "colors.hpp"
 #include <ranges>
+#include <tuple>
 
 namespace
 {
@@ -144,24 +148,82 @@ struct expr_ : lexy::expression_production
       { return binary_op{std::move(lhs), op, std::move(rhs)}; }, [](expr e) { return e; });
 };
 
+template <lexy::_detail::string_literal name_, float value_>
+struct constant_builtin
+{
+  static constexpr auto name = name_;
+  static constexpr auto value = value_;
+};
+
+static constexpr auto constant_builtins =
+    std::make_tuple(constant_builtin<"pi", std::numbers::pi_v<float>>{},
+                    constant_builtin<"e", std::numbers::e_v<float>>{});
+
+template <size_t I>
+using constant_builtin_t = std::remove_cvref_t<decltype(std::get<I>(constant_builtins))>;
+
+template <lexy::_detail::string_literal name_, float (*func_)(float)>
+struct unary_builtin
+{
+  static constexpr auto name = name_;
+  static constexpr auto func = func_;
+};
+
+static constexpr auto unary_builtins =
+    std::make_tuple(unary_builtin<"abs", std::abs>{}, unary_builtin<"acos", std::acos>{},
+                    unary_builtin<"acosh", std::acosh>{}, unary_builtin<"asin", std::asin>{},
+                    unary_builtin<"asinh", std::asinh>{}, unary_builtin<"atan", std::atan>{},
+                    unary_builtin<"atanh", std::atanh>{}, unary_builtin<"ceil", std::ceil>{},
+                    unary_builtin<"cos", std::cos>{}, unary_builtin<"cosh", std::cosh>{},
+                    unary_builtin<"exp", std::exp>{}, unary_builtin<"floor", std::floor>{},
+                    unary_builtin<"log", std::log>{}, unary_builtin<"log10", std::log10>{},
+                    unary_builtin<"sgn", [](float v) { return std::copysign(1.0f, v); }>{},
+                    unary_builtin<"sin", std::sin>{}, unary_builtin<"sinh", std::sinh>{},
+                    unary_builtin<"sqrt", std::sqrt>{}, unary_builtin<"tan", std::tan>{},
+                    unary_builtin<"tanh", std::tanh>{});
+
+template <size_t i>
+using unary_builtin_t = std::remove_cvref_t<decltype(std::get<i>(unary_builtins))>;
+
+template <template <size_t> typename parser, size_t... Is>
+struct disjunction_
+{
+  static constexpr auto rule = (dsl::p<parser<Is>> | ...);
+  static constexpr auto value = lexy::forward<float>;
+};
+
+template <template <size_t> typename parser, size_t... Is>
+disjunction_<parser, Is...> make_disjunction(std::index_sequence<Is...>);
+
+template <template <size_t> typename parser, size_t N>
+using disjunction = decltype(make_disjunction<parser>(std::make_index_sequence<N>()));
+
 struct const_expr_;
 
 struct const_var_or_call_
 {
-  struct pi
+  template <size_t I>
+  struct const_parser
   {
-    static constexpr auto rule = LEXY_KEYWORD("pi", kw_id);
-    static constexpr auto value = lexy::constant(std::numbers::pi_v<float>);
+    static constexpr auto rule = dsl::keyword<constant_builtin_t<I>::name>(kw_id);
+    static constexpr auto value = lexy::constant(constant_builtin_t<I>::value);
   };
 
-  struct sin
+  using constant = disjunction<const_parser, std::tuple_size_v<decltype(constant_builtins)>>;
+
+  template <size_t I>
+  struct unary_parser
   {
-    static constexpr auto rule = LEXY_KEYWORD("sin", kw_id)
+    static constexpr auto rule = dsl::keyword<unary_builtin_t<I>::name>(kw_id)
                                  >> dsl::parenthesized(dsl::recurse<const_expr_>);
-    static constexpr auto value = lexy::callback<float>([](float v) { return std::sin(v); });
+
+    static constexpr auto value =
+        lexy::callback<float>([](float v) { return unary_builtin_t<I>::func(v); });
   };
 
-  static constexpr auto rule = dsl::p<pi> | dsl::p<sin>;
+  using unaries = disjunction<unary_parser, std::tuple_size_v<decltype(unary_builtins)>>;
+
+  static constexpr auto rule = dsl::p<constant> | dsl::p<unaries>;
   static constexpr auto value = lexy::forward<float>;
 };
 
