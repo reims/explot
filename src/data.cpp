@@ -163,7 +163,7 @@ out vec2 v;
 
 void  main()
 {{
-  float t = mint_t + step_t * gl_InstanceID;
+  float t = min_t + step_t * gl_InstanceID;
   float x_value = {};
   float y_value = {};
   v = vec2(x_value, y_value);

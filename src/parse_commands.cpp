@@ -148,7 +148,26 @@ struct expr_ : lexy::expression_production
       { return binary_op{std::move(lhs), op, std::move(rhs)}; }, [](expr e) { return e; });
 };
 
-template <lexy::_detail::string_literal name_, float value_>
+template <size_t N>
+struct nttp_str
+{
+  char data[N];
+
+  constexpr nttp_str(const char *d)
+  {
+    for (auto i = 0u; i < N; ++i)
+    {
+      data[i] = d[i];
+    }
+  }
+
+  constexpr std::string_view as_sv() const { return {data, N - 1}; }
+};
+
+template <size_t N>
+nttp_str(const char (&d)[N]) -> nttp_str<N>;
+
+template <nttp_str name_, float value_>
 struct constant_builtin
 {
   static constexpr auto name = name_;
@@ -162,7 +181,30 @@ static constexpr auto constant_builtins =
 template <size_t I>
 using constant_builtin_t = std::remove_cvref_t<decltype(std::get<I>(constant_builtins))>;
 
-template <lexy::_detail::string_literal name_, float (*func_)(float)>
+std::optional<float> find_constant_(std::string_view name, std::index_sequence<>)
+{
+  return std::nullopt;
+}
+template <size_t I, size_t... Is>
+std::optional<float> find_constant_(std::string_view name, std::index_sequence<I, Is...>)
+{
+  if (name == constant_builtin_t<I>::name.as_sv())
+  {
+    return constant_builtin_t<I>::value;
+  }
+  else
+  {
+    return find_constant_(name, std::index_sequence<Is...>{});
+  }
+}
+
+std::optional<float> find_constant(std::string_view name)
+{
+  return find_constant_(name,
+                        std::make_index_sequence<std::tuple_size_v<decltype(constant_builtins)>>{});
+}
+
+template <nttp_str name_, float (*func_)(float)>
 struct unary_builtin
 {
   static constexpr auto name = name_;
@@ -185,6 +227,29 @@ static constexpr auto unary_builtins =
 template <size_t i>
 using unary_builtin_t = std::remove_cvref_t<decltype(std::get<i>(unary_builtins))>;
 
+std::optional<std::string_view> find_unary_(std::string_view, std::index_sequence<>)
+{
+  return std::nullopt;
+}
+
+template <size_t I, size_t... Is>
+std::optional<std::string_view> find_unary_(std::string_view name, std::index_sequence<I, Is...>)
+{
+  if (name == unary_builtin_t<I>::name.as_sv())
+  {
+    return name;
+  }
+  else
+  {
+    return find_unary_(name, std::index_sequence<Is...>{});
+  }
+}
+
+std::optional<std::string_view> find_unary(std::string_view name)
+{
+  return find_unary_(name, std::make_index_sequence<std::tuple_size_v<decltype(unary_builtins)>>{});
+}
+
 template <template <size_t> typename parser, size_t... Is>
 struct disjunction_
 {
@@ -205,7 +270,7 @@ struct const_var_or_call_
   template <size_t I>
   struct const_parser
   {
-    static constexpr auto rule = dsl::keyword<constant_builtin_t<I>::name>(kw_id);
+    static constexpr auto rule = dsl::keyword<constant_builtin_t<I>::name.data>(kw_id);
     static constexpr auto value = lexy::constant(constant_builtin_t<I>::value);
   };
 
@@ -214,7 +279,7 @@ struct const_var_or_call_
   template <size_t I>
   struct unary_parser
   {
-    static constexpr auto rule = dsl::keyword<unary_builtin_t<I>::name>(kw_id)
+    static constexpr auto rule = dsl::keyword<unary_builtin_t<I>::name.data>(kw_id)
                                  >> dsl::parenthesized(dsl::recurse<const_expr_>);
 
     static constexpr auto value =
@@ -1057,21 +1122,123 @@ std::expected<csv_data, std::string> validate(mark_type_2d mark, csv_data data)
   return {std::move(data)};
 }
 
+std::expected<expr, std::string> validate_expression(expr e, std::span<const std::string> vars,
+                                                     bool dataref_allowed)
+{
+  struct validator
+  {
+    std::span<const std::string> vars;
+    bool dataref_allowed;
+
+    std::expected<expr, std::string> operator()(literal_expr &&l) const { return l; }
+    std::expected<expr, std::string> operator()(box<unary_op> &&o) const
+    {
+      return std::visit(*this, std::move(o->operand))
+          .transform([&](expr &&operand) { return box{unary_op{o->op, std::move(operand)}}; });
+    }
+    std::expected<expr, std::string> operator()(box<binary_op> &&o) const
+    {
+      return std::visit(*this, std::move(o->lhs))
+          .and_then(
+              [&](expr &&lhs)
+              {
+                return std::visit(*this, std::move(o->rhs))
+                    .transform([&](expr &&rhs)
+                               { return std::make_pair(std::move(lhs), std::move(rhs)); });
+              })
+          .transform([&](auto &&p)
+                     { return box{binary_op{std::move(p.first), o->op, std::move(p.second)}}; });
+    }
+    std::expected<expr, std::string> operator()(box<var_or_call> &&v) const
+    {
+      if (v->params)
+      {
+        auto name = r::find_unary(v->name);
+        if (!name)
+        {
+          return std::unexpected(fmt::format("uknown function '{}'", v->name));
+        }
+        else if (v->params->size() != 1)
+        {
+          return std::unexpected(fmt::format("function {} takes 1 argument but got {} arguments.",
+                                             v->name, v->params->size()));
+        }
+        else
+        {
+          return std::visit(*this, std::move(v->params->at(0)))
+              .transform(
+                  [&](expr &&arg)
+                  {
+                    return box{var_or_call{std::string(name.value()), std::vector{std::move(arg)}}};
+                  });
+        }
+      }
+      else
+      {
+        auto value = r::find_constant(v->name);
+        if (value)
+        {
+          return literal_expr{*value};
+        }
+        else if (std::ranges::find(vars, v->name) != vars.end())
+        {
+          return std::move(v);
+        }
+        else
+        {
+          return std::unexpected(fmt::format("unknown variable '{}'", v->name));
+        }
+      }
+    }
+    std::expected<expr, std::string> operator()(data_ref &&d) const
+    {
+      if (dataref_allowed)
+      {
+        return std::move(d);
+      }
+      else
+      {
+        return std::unexpected("columns outside of datafiles is not allowed.");
+      }
+    };
+  };
+  return std::visit(validator{vars, dataref_allowed}, std::move(e));
+}
+
+auto validate_all(std::ranges::range auto r)
+{
+  using exp = std::ranges::range_value_t<decltype(r)>;
+  using value = exp::value_type;
+  using error = exp::error_type;
+  auto result = std::expected<std::vector<value>, error>();
+  for (auto &&e : r)
+  {
+    if (e.has_value())
+    {
+      result.value().push_back(std::move(e.value()));
+    }
+    else
+    {
+      result = std::unexpected(std::move(e.error()));
+    }
+  }
+  return result;
+}
+
 std::expected<expr, std::string> validate(mark_type_2d mark, expr e)
 {
-  // TODO: check that e is valid
-  return {std::move(e)};
+  auto x = std::string("x");
+  return validate_expression(std::move(e), {&x, 1}, false);
 }
 
 std::expected<expr, std::string> validate(mark_type_3d, expr e)
 {
-  // TODO: check that e is valid
-  return {std::move(e)};
+  std::string vars[]{"x", "y"};
+  return validate_expression(std::move(e), vars, false);
 }
 
 std::expected<parametric_data_2d, std::string> validate(mark_type_2d m, parametric_data_2d data)
 {
-  // TODO: check that expressions are valid
   // TODO: implement impulses
   if (m == mark_type_2d::impulses)
   {
@@ -1079,14 +1246,41 @@ std::expected<parametric_data_2d, std::string> validate(mark_type_2d m, parametr
   }
   else
   {
-    return {std::move(data)};
+    auto t = std::string("t");
+    return validate_expression(std::move(data.x_expression), {&t, 1}, false)
+        .and_then(
+            [&](expr &&x)
+            {
+              return validate_expression(std::move(data.y_expression), {&t, 1}, false)
+                  .transform([&](expr &&y)
+                             { return parametric_data_2d{std::move(x), std::move(y)}; });
+            });
   }
 }
 
 std::expected<parametric_data_3d, std::string> validate(mark_type_3d, parametric_data_3d data)
 {
   // TODO: check that expressions are valid
-  return {std::move(data)};
+  std::string vars[] = {"u", "v"};
+
+  return validate_expression(std::move(data.x_expression), vars, false)
+      .and_then(
+          [&](expr &&x)
+          {
+            return validate_expression(std::move(data.y_expression), vars, false)
+                .transform([&](expr &&y) { return std::make_tuple(x, y); });
+          })
+      .and_then(
+          [&](auto &&t)
+          {
+            return validate_expression(std::move(data.z_expression), vars, false)
+                .transform(
+                    [&](expr &&z)
+                    {
+                      return parametric_data_3d{std::move(std::get<0>(t)),
+                                                std::move(std::get<1>(t)), std::move(z)};
+                    });
+          });
 }
 
 std::expected<graph_desc_2d, std::string> validate(graph_desc_2d graph)
@@ -1111,26 +1305,6 @@ std::expected<graph_desc_3d, std::string> validate(graph_desc_3d graph)
         graph.data = std::move(d);
         return graph;
       });
-}
-
-auto validate_all(std::ranges::range auto r)
-{
-  using exp = std::ranges::range_value_t<decltype(r)>;
-  using value = exp::value_type;
-  using error = exp::error_type;
-  auto result = std::expected<std::vector<value>, error>();
-  for (auto &&e : r)
-  {
-    if (e.has_value())
-    {
-      result.value().push_back(std::move(e.value()));
-    }
-    else
-    {
-      result = std::unexpected(std::move(e.error()));
-    }
-  }
-  return result;
 }
 
 std::expected<plot_command_2d, std::string> validate(plot_command_2d plot)
