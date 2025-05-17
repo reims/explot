@@ -117,8 +117,8 @@ read_matrix_csv(const std::filesystem::path &p, char delim, std::optional<time_p
         auto eof = std::find(it, line.cend(), delim);
         if (!columns.has_value() || *columns > column)
         {
-          result.push_back(column);
-          result.push_back(row);
+          result.emplace_back(column);
+          result.emplace_back(row);
           ++column;
           auto value = 0.0f;
           auto [ptr, ec] = std::from_chars(it, eof, value);

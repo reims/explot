@@ -12,6 +12,7 @@
 
 namespace
 {
+using namespace explot;
 constexpr auto prepare_shader = R"shader(#version 330 core
 layout (location = 0) in float d;
 out vec2 v;
@@ -34,7 +35,7 @@ void main()
 }
 )shader";
 
-void step(unsigned int src_vbo, unsigned int tgt_vbo, int num_points)
+void step(gl_id src_vbo, gl_id tgt_vbo, uint32_t num_points)
 {
   auto num_draws = static_cast<std::size_t>(num_points / 2);
   assert(num_draws > 0);
@@ -73,7 +74,7 @@ explot::program_handle program_for_shader(const char *shader_src)
   return explot::make_program_with_varying(shader_src, "v");
 }
 
-explot::vbo_handle prepare(const explot::data_desc &d, size_t stride, size_t offset)
+explot::vbo_handle prepare(const explot::data_desc &d, uint32_t stride, uint32_t offset)
 {
   assert(d.point_size % stride == 0);
   auto num_points = d.num_points * (d.point_size / stride);
@@ -93,13 +94,13 @@ explot::vbo_handle prepare(const explot::data_desc &d, size_t stride, size_t off
                         (void *)(offset * sizeof(float)));
   glEnableVertexAttribArray(0);
   glBeginTransformFeedback(GL_POINTS);
-  glDrawArrays(GL_POINTS, 0, num_points);
+  glDrawArrays(GL_POINTS, 0, static_cast<int32_t>(num_points));
   glEndTransformFeedback();
   glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
   return vbo;
 }
 
-glm::vec2 minmax(const explot::data_desc &d, size_t stride, size_t offset)
+glm::vec2 minmax(const explot::data_desc &d, uint32_t stride, uint32_t offset)
 {
   if (d.num_points == 0)
   {
@@ -134,13 +135,13 @@ glm::vec2 minmax(const explot::data_desc &d, size_t stride, size_t offset)
 
 namespace explot
 {
-glm::vec2 minmax_x(const data_desc &d, size_t stride) { return minmax(d, stride, 0); }
+glm::vec2 minmax_x(const data_desc &d, uint32_t stride) { return minmax(d, stride, 0); }
 
-glm::vec2 minmax_y(const data_desc &d, size_t stride) { return minmax(d, stride, 1); }
+glm::vec2 minmax_y(const data_desc &d, uint32_t stride) { return minmax(d, stride, 1); }
 
-glm::vec2 minmax_z(const data_desc &d, size_t stride) { return minmax(d, stride, 2); }
+glm::vec2 minmax_z(const data_desc &d, uint32_t stride) { return minmax(d, stride, 2); }
 
-rect bounding_rect_2d(const data_desc &d, size_t stride)
+rect bounding_rect_2d(const data_desc &d, uint32_t stride)
 {
   auto bx = minmax_x(d, stride);
   if (bx.y - bx.x < 1e-8)
@@ -159,7 +160,7 @@ rect bounding_rect_2d(const data_desc &d, size_t stride)
               .upper_bounds = glm::vec3(bx.y, by.y, 1.0f)};
 }
 
-rect bounding_rect_3d(const data_desc &d, size_t stride)
+rect bounding_rect_3d(const data_desc &d, uint32_t stride)
 {
   auto bx = minmax_x(d, stride);
   if (bx.y - bx.x < 1e-8)

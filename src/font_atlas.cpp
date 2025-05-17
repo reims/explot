@@ -174,7 +174,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
       }
       for (auto i = 0ULL; i < glyphs.size(); ++i)
       {
-        auto glyph_index = FT_Get_Char_Index(font.get(), glyphs[i]);
+        auto glyph_index = FT_Get_Char_Index(font.get(), FT_ULong(glyphs[i]));
         FT_Load_Glyph(font.get(), glyph_index, FT_LOAD_DEFAULT);
         FT_Glyph g;
         FT_Get_Glyph(font->glyph, &g);
@@ -182,7 +182,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
         shapes.emplace_back(g);
         auto bitmap = (FT_BitmapGlyph)shapes[i].get();
         glyphs_data.emplace_back(glm::vec2(width, 0),
-                                 glm::vec2(width + bitmap->bitmap.width, bitmap->bitmap.rows));
+                                 glm::vec2(width + int(bitmap->bitmap.width), bitmap->bitmap.rows));
         auto box = FT_BBox{};
         FT_Glyph_Get_CBox(shapes[i].get(), ft_glyph_bbox_pixels, &box);
         auto fbox = FT_BBox{};
@@ -206,7 +206,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
         auto bitmap = (FT_BitmapGlyph)shapes[i].get();
         for (auto row = 0u; row < bitmap->bitmap.rows; ++row)
         {
-          std::memcpy(tex_data.get() + (row * width + start_column),
+          std::memcpy(tex_data.get() + (int(row) * width + int(start_column)),
                       bitmap->bitmap.buffer
                           + (bitmap->bitmap.rows - row - 1) * bitmap->bitmap.width,
                       bitmap->bitmap.width);
@@ -251,8 +251,9 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
 }
 
 gl_string::gl_string(const font_atlas &atlas, std::string_view str)
-    : size(str.size()), vao(make_vao()), uv_coordinates(make_vbo()), screen_coordinates(make_vbo()),
-      tex_vbo(make_tex_vbo()), texture(atlas.texture), program(make_string_program())
+    : size(static_cast<uint32_t>(str.size())), vao(make_vao()), uv_coordinates(make_vbo()),
+      screen_coordinates(make_vbo()), tex_vbo(make_tex_vbo()), texture(atlas.texture),
+      program(make_string_program())
 {
   glBindVertexArray(vao);
   auto uv_coords = std::make_unique<glm::vec2[]>(2 * str.size());
@@ -260,14 +261,14 @@ gl_string::gl_string(const font_atlas &atlas, std::string_view str)
   auto width = 0.0f;
   auto y_lower_bound = std::numeric_limits<float>::max();
   auto y_upper_bound = std::numeric_limits<float>::lowest();
-  auto previous = 0;
+  auto previous = 0u;
   auto has_kerning = FT_HAS_KERNING(atlas.font.get());
   for (auto i = 0ULL; i < str.size(); ++i)
   {
     auto idx = static_cast<std::size_t>(
         std::distance(std::begin(atlas.glyphs),
                       std::find(std::begin(atlas.glyphs), std::end(atlas.glyphs), str[i])));
-    auto glyph_index = FT_Get_Char_Index(atlas.font.get(), str[i]);
+    auto glyph_index = FT_Get_Char_Index(atlas.font.get(), FT_ULong(str[i]));
     assert(idx < atlas.glyphs.size());
     assert(glyph_index > 0);
     auto bitmap = (FT_BitmapGlyph)atlas.ft_glyphs[idx].get();
@@ -280,13 +281,13 @@ gl_string::gl_string(const font_atlas &atlas, std::string_view str)
     {
       FT_Vector kerning = {0, 0};
       FT_Get_Kerning(atlas.font.get(), previous, glyph_index, FT_KERNING_DEFAULT, &kerning);
-      width += (kerning.x >> 6);
+      width += static_cast<float>(kerning.x >> 6);
     }
     const auto screen_lower_bounds =
         glm::vec2(bitmap->left, bitmap->top - static_cast<int>(bitmap->bitmap.rows))
         + glm::vec2(width, 0.0f);
     const auto screen_dimensions = glm::vec2(bitmap->bitmap.width, bitmap->bitmap.rows);
-    width += bitmap->root.advance.x >> 16;
+    width += static_cast<float>(bitmap->root.advance.x >> 16);
     y_lower_bound = std::min(y_lower_bound, screen_lower_bounds.y);
     y_upper_bound = std::max(y_upper_bound, screen_lower_bounds.y + screen_dimensions.y);
     std::memcpy(&screen_coords[2 * i], &screen_lower_bounds, sizeof(glm::vec2));

@@ -12,6 +12,7 @@ add_executable(explot
   point_drawing.cpp
   font_atlas.cpp
   parse_commands.cpp
+  parse_ast.cpp
   csv.cpp
   events.cpp
   drag_renderer.cpp
@@ -66,4 +67,4 @@ target_link_libraries(explot PRIVATE Fontconfig::Fontconfig)
 
 target_compile_options(explot  PUBLIC)
 
-target_compile_options(explot PRIVATE -Og -Wpedantic -Werror -Wextra -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-deprecated-declarations -Wno-unused-command-line-argument -stdlib=libc++)
+target_compile_options(explot PRIVATE -Og -Wpedantic -Werror -Wextra -Wall -Wconversion -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-deprecated-declarations -Wno-unused-command-line-argument -stdlib=libc++ -fvisibility=hidden)

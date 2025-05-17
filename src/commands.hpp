@@ -23,8 +23,14 @@ struct data_ref
   int idx;
 };
 
-using expr = std::variant<literal_expr, box<struct unary_op>, box<struct binary_op>,
-                          box<struct var_or_call>, data_ref>;
+struct var
+{
+  std::string name;
+};
+
+using expr =
+    std::variant<literal_expr, box<struct unary_op>, box<struct binary_op>,
+                 box<struct unary_builtin_call>, box<struct binary_builtin_call>, var, data_ref>;
 
 enum class unary_operator
 {
@@ -53,10 +59,17 @@ struct binary_op final
   expr rhs;
 };
 
-struct var_or_call final
+struct unary_builtin_call
 {
   std::string name;
-  std::optional<std::vector<expr>> params;
+  expr arg;
+};
+
+struct binary_builtin_call
+{
+  std::string name;
+  expr arg1;
+  expr arg2;
 };
 
 struct line_type_spec
@@ -65,7 +78,7 @@ struct line_type_spec
   std::optional<float> width;
 };
 
-using line_type_desc = std::variant<line_type_spec, int>;
+using line_type_desc = std::variant<line_type_spec, uint32_t>;
 
 struct csv_data final
 {
@@ -139,8 +152,8 @@ struct plot_command_3d final
 
 struct samples_setting final
 {
-  std::size_t x = 100;
-  std::size_t y = 100;
+  uint32_t x = 100;
+  uint32_t y = 100;
 };
 
 enum class data_type : char

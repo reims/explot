@@ -18,14 +18,14 @@ data_desc data_for_coordinate_system(std::uint32_t num_ticks)
   const auto radius = 0.05f;
   for (auto i = 0u; i < num_ticks; ++i)
   {
-    data.emplace_back(-1.0f + i * step, -1.0f - radius, -1.0f);
-    data.emplace_back(-1.0f + i * step, -1.0f + radius, -1.0f);
+    data.emplace_back(-1.0f + static_cast<float>(i) * step, -1.0f - radius, -1.0f);
+    data.emplace_back(-1.0f + static_cast<float>(i) * step, -1.0f + radius, -1.0f);
 
-    data.emplace_back(-1.0f, -1.0f + i * step, -1.0f - radius);
-    data.emplace_back(-1.0f, -1.0f + i * step, -1.0f + radius);
+    data.emplace_back(-1.0f, -1.0f + static_cast<float>(i) * step, -1.0f - radius);
+    data.emplace_back(-1.0f, -1.0f + static_cast<float>(i) * step, -1.0f + radius);
 
-    data.emplace_back(-1.0f - radius, -1.0f, -1.0f + i * step);
-    data.emplace_back(-1.0f + radius, -1.0f, -1.0f + i * step);
+    data.emplace_back(-1.0f - radius, -1.0f, -1.0f + static_cast<float>(i) * step);
+    data.emplace_back(-1.0f + radius, -1.0f, -1.0f + static_cast<float>(i) * step);
   }
   return data_for_span(data);
 }
@@ -65,7 +65,7 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
   for (auto i = 0u; i < num_ticks; ++i)
   {
     auto offset = phase_to_clip * cs.scale_to_phase
-                  * glm::vec4(-1.0f + i * step, -1.0f - radius, -1.0f, 1.0f);
+                  * glm::vec4(-1.0f + static_cast<float>(i) * step, -1.0f - radius, -1.0f, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
     draw(cs.xlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
@@ -73,7 +73,7 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
   for (auto i = 0u; i < num_ticks; ++i)
   {
     auto offset = phase_to_clip * cs.scale_to_phase
-                  * glm::vec4(-1.0f, -1.0f + i * step, -1.0f - radius, 1.0f);
+                  * glm::vec4(-1.0f, -1.0f + static_cast<float>(i) * step, -1.0f - radius, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
     draw(cs.ylabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
@@ -81,7 +81,7 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
   for (auto i = 0u; i < num_ticks; ++i)
   {
     auto offset = phase_to_clip * cs.scale_to_phase
-                  * glm::vec4(-1.0f - radius, -1.0f, -1.0f + i * step, 1.0f);
+                  * glm::vec4(-1.0f - radius, -1.0f, -1.0f + static_cast<float>(i) * step, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
     draw(cs.zlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});

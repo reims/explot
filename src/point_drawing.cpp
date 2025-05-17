@@ -142,7 +142,7 @@ void draw(const points_2d_state &state, float line_width, float point_width, con
                    {"phase_to_screen", view_to_screen},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_POINTS, 0, state.data.num_points);
+  glDrawArrays(GL_POINTS, 0, static_cast<int32_t>(state.data.num_points));
 }
 
 points_3d_state::points_3d_state(data_desc d)
@@ -163,7 +163,7 @@ void draw(const points_3d_state &state, float line_width, float point_width, con
                    {"screen_to_clip", screen_to_clip}, {"phase_to_clip", phase_to_clip},
                    {"clip_to_screen", clip_to_screen}, {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_POINTS, 0, state.data.num_points);
+  glDrawArrays(GL_POINTS, 0, static_cast<int32_t>(state.data.num_points));
 }
 
 } // namespace explot

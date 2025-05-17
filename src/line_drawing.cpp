@@ -204,17 +204,17 @@ void main()
 }
 )foo";
 
-auto shape_for_lines(int segments)
+auto shape_for_lines(uint32_t segments)
 {
   auto result = std::make_unique<float[]>(4 * segments + 4);
-  auto angleDiff = std::numbers::pi_v<float> / segments;
-  for (auto i = 0; i <= segments; ++i)
+  auto angleDiff = std::numbers::pi_v<float> / static_cast<float>(segments);
+  for (auto i = 0u; i <= segments; ++i)
   {
-    auto angle = i * angleDiff;
+    auto angle = static_cast<float>(i) * angleDiff;
     result[2 * i] = std::cos(angle);
     result[2 * i + 1] = std::sin(angle);
   }
-  for (auto i = 0; i <= segments; ++i)
+  for (auto i = 0u; i <= segments; ++i)
   {
     result[2 * (i + segments + 1)] = result[2 * i];
     result[2 * (i + segments + 1) + 1] = -result[2 * i + 1];
@@ -337,7 +337,7 @@ void draw(const lines_state_2d &state, float width, const glm::mat4 &phase_to_sc
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_LINES, 0, state.data.num_points);
+  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_points));
 }
 
 void draw(const lines_state_3d &state, float width, const glm::mat4 &phase_to_clip,
@@ -350,7 +350,7 @@ void draw(const lines_state_3d &state, float width, const glm::mat4 &phase_to_cl
                    {"screen_to_clip", screen_to_clip},
                    {"color", color}};
   set_uniforms(state.program, ufs);
-  glDrawArrays(GL_LINES, 0, state.data.num_points);
+  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_points));
 }
 
 } // namespace explot

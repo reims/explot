@@ -59,7 +59,7 @@ namespace explot
 legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts)
     : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
-  int i = 0;
+  auto i = 0u;
   for (const auto &g : graphs)
   {
     switch (g.mark)
@@ -80,7 +80,7 @@ legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type>
 legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts)
     : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
-  int i = 0;
+  auto i = 0u;
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
   for (const auto &g : graphs)

@@ -17,7 +17,7 @@ struct plot_with_view_space
 
   explicit plot_with_view_space(plot2d plot)
       : plot(std::move(plot)),
-        view_space(scale2d(round_for_ticks_2d(plot.phase_space, 5, 2).bounding_rect, 1.1))
+        view_space(scale2d(round_for_ticks_2d(plot.phase_space, 5, 2).bounding_rect, 1.1f))
   {
   }
 };

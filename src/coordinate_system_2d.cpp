@@ -104,7 +104,7 @@ auto program_for_ticks()
 } // namespace
 namespace explot
 {
-coordinate_system_2d make_coordinate_system_2d(const tics_desc &tics, int num_ticks,
+coordinate_system_2d make_coordinate_system_2d(const tics_desc &tics, uint32_t num_ticks,
                                                time_point timebase)
 {
   auto d = data_for_axes(tics.bounding_rect.lower_bounds, tics.bounding_rect.upper_bounds);
@@ -165,13 +165,13 @@ void draw(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen,
                                   / static_cast<float>(cs.num_ticks - 1)}};
   set_uniforms(cs.program_for_ticks, common_ufs);
   set_uniforms(cs.program_for_ticks, x_ufs);
-  glDrawArrays(GL_POINTS, 0, cs.num_ticks);
+  glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(cs.num_ticks));
   set_uniforms(cs.program_for_ticks, y_ufs);
-  glDrawArrays(GL_POINTS, 0, cs.num_ticks);
+  glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(cs.num_ticks));
   draw(cs.axis, 1.0f, view_to_screen, screen_to_clip, axis_color);
   const auto steps = (cs.bounding_rect.upper_bounds - cs.bounding_rect.lower_bounds)
                      / static_cast<float>(cs.num_ticks - 1);
-  for (auto i = 0.0; i < cs.num_ticks; ++i)
+  for (auto i = 0u; i < cs.num_ticks; ++i)
   {
     const auto p_x =
         cs.bounding_rect.lower_bounds + glm::vec3(static_cast<float>(i) * steps.x, 0.0f, 0.0f);

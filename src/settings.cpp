@@ -118,7 +118,7 @@ samples_setting isosamples() { return place<settings_id::isosamples>; }
 bool parametric() { return place<settings_id::parametric>; }
 const char *timefmt() { return place<settings_id::timefmt>.c_str(); }
 data_type xdata() { return place<settings_id::xdata>; }
-const line_type &line_type_by_index(int idx)
+const line_type &line_type_by_index(uint32_t idx)
 {
   assert(idx > 0);
   return line_types[(idx - 1) % num_line_types];

@@ -10,11 +10,11 @@ std::vector<line_type> resolve_line_types_(std::span<const T> graphs)
 {
   auto result = std::vector<line_type>();
   result.reserve(graphs.size());
-  int idx = 1;
+  auto idx = 1u;
   for (const auto &g : graphs)
   {
     auto lt = std::visit(overload(
-                             [&](int ref)
+                             [&](uint32_t ref)
                              {
                                idx = ref;
                                return settings::line_type_by_index(idx);
