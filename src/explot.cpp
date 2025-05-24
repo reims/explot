@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include "colors.hpp"
+#include "user_definitions.hpp"
 
 namespace
 {
@@ -195,6 +196,10 @@ int main()
       {
         const auto &unset_cmd = std::get<unset_command>(cmd.value());
         settings::unset(unset_cmd);
+      }
+      else if (std::holds_alternative<user_definition>(cmd.value()))
+      {
+        add_definition(std::get<user_definition>(std::move(cmd.value())));
       }
       else
       {

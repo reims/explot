@@ -27,6 +27,7 @@ add_executable(explot
   line_type.cpp
   rx-renderers.cpp
   impulse.cpp
+  user_definitions.cpp
 )
 
 include(FetchContent)

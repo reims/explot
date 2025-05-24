@@ -28,9 +28,14 @@ struct var
   std::string name;
 };
 
-using expr =
-    std::variant<literal_expr, box<struct unary_op>, box<struct binary_op>,
-                 box<struct unary_builtin_call>, box<struct binary_builtin_call>, var, data_ref>;
+struct user_var_ref
+{
+  uint32_t idx;
+};
+
+using expr = std::variant<literal_expr, box<struct unary_op>, box<struct binary_op>,
+                          box<struct unary_builtin_call>, box<struct binary_builtin_call>,
+                          box<struct user_function_call>, user_var_ref, var, data_ref>;
 
 enum class unary_operator
 {
@@ -72,6 +77,12 @@ struct binary_builtin_call
   expr arg2;
 };
 
+struct user_function_call
+{
+  uint32_t idx;
+  std::vector<expr> args;
+};
+
 struct line_type_spec
 {
   std::optional<glm::vec4> color;
@@ -89,8 +100,7 @@ struct csv_data final
 
 struct parametric_data_2d final
 {
-  expr x_expression;
-  expr y_expression;
+  expr expressions[2];
 };
 
 enum struct mark_type_2d
@@ -126,9 +136,7 @@ struct plot_command_2d final
 
 struct parametric_data_3d final
 {
-  expr x_expression;
-  expr y_expression;
-  expr z_expression;
+  expr expressions[3];
 };
 
 using data_source_3d = std::variant<expr, csv_data, parametric_data_3d>;
@@ -264,8 +272,15 @@ struct set_command
   enum_sum_t<settings_id, settings_value, all_settings> value;
 };
 
-using command = std::variant<quit_command, plot_command_2d, plot_command_3d, set_command,
-                             show_command, unset_command>;
+struct user_definition
+{
+  std::string name;
+  std::optional<std::vector<std::string>> params;
+  expr body;
+};
+
+using command = std::variant<quit_command, plot_command_2d, plot_command_3d, user_definition,
+                             set_command, show_command, unset_command>;
 
 inline bool is_quit_command(const command &cmd)
 {

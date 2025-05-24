@@ -8,10 +8,37 @@
 #include <tuple>
 #include "parse_ast.hpp"
 #include "overload.hpp"
+#include "user_definitions.hpp"
 
 namespace
 {
 using namespace explot;
+auto validate_all(std::ranges::range auto r)
+{
+  using exp = std::ranges::range_value_t<decltype(r)>;
+  using value = exp::value_type;
+  using error = exp::error_type;
+  auto result = std::expected<std::vector<value>, error>();
+  for (auto &&e : r)
+  {
+    if (e.has_value())
+    {
+      result.value().push_back(std::move(e.value()));
+    }
+    else
+    {
+      result = std::unexpected(std::move(e.error()));
+      break;
+    }
+  }
+  return result;
+}
+
+auto moving_range(auto &c)
+{
+  return std::ranges::subrange(std::make_move_iterator(c.begin()),
+                               std::make_move_iterator(c.end()));
+}
 
 unary_operator transform_unary_op(ast::unary_operator op)
 {
@@ -24,8 +51,8 @@ unary_operator transform_unary_op(ast::unary_operator op)
   }
 }
 
-std::expected<expr, std::string> validate_expression(ast::expr e, std::span<const std::string> vars,
-                                                     bool dataref_allowed)
+std::expected<expr, std::string>
+validate_expression(ast::expr &&e, std::span<const std::string> vars, bool dataref_allowed)
 {
   struct validator
   {
@@ -116,6 +143,25 @@ std::expected<expr, std::string> validate_expression(ast::expr e, std::span<cons
                     });
           }
         }
+        else if (auto idx = find_user_function(v->name); idx)
+        {
+          auto &def = get_definition(*idx);
+          if (def.params->size() != v->params->size())
+          {
+            return std::unexpected(fmt::format("function {} takes {} arguments but got {}.",
+                                               v->name, def.params->size(), v->params->size()));
+          }
+          else
+          {
+            return validate_all(
+                       moving_range(*v->params)
+                       | std::views::transform(
+                           [&](ast::expr &&arg)
+                           { return validate_expression(std::move(arg), vars, dataref_allowed); }))
+                .transform([&](std::vector<expr> &&args)
+                           { return box{user_function_call{*idx, std::move(args)}}; });
+          }
+        }
         else
         {
           return std::unexpected(fmt::format("uknown function '{}'", v->name));
@@ -130,6 +176,10 @@ std::expected<expr, std::string> validate_expression(ast::expr e, std::span<cons
         else if (std::ranges::find(vars, v->name) != vars.end())
         {
           return var{std::move(v->name)};
+        }
+        else if (auto idx = find_user_variable(v->name); idx)
+        {
+          return user_var_ref{*idx};
         }
         else
         {
@@ -152,34 +202,7 @@ std::expected<expr, std::string> validate_expression(ast::expr e, std::span<cons
   return std::visit(validator{vars, dataref_allowed}, std::move(e));
 }
 
-auto validate_all(std::ranges::range auto r)
-{
-  using exp = std::ranges::range_value_t<decltype(r)>;
-  using value = exp::value_type;
-  using error = exp::error_type;
-  auto result = std::expected<std::vector<value>, error>();
-  for (auto &&e : r)
-  {
-    if (e.has_value())
-    {
-      result.value().push_back(std::move(e.value()));
-    }
-    else
-    {
-      result = std::unexpected(std::move(e.error()));
-      break;
-    }
-  }
-  return result;
-}
-
-auto moving_range(auto &c)
-{
-  return std::ranges::subrange(std::make_move_iterator(c.begin()),
-                               std::make_move_iterator(c.end()));
-}
-
-std::expected<csv_data, std::string> validate(mark_type_3d, ast::csv_data data)
+std::expected<csv_data, std::string> validate(mark_type_3d, ast::csv_data &&data)
 {
   return [&] -> std::expected<std::vector<expr>, std::string>
   {
@@ -226,7 +249,7 @@ std::expected<csv_data, std::string> validate(mark_type_3d, ast::csv_data data)
                         });
 }
 
-std::expected<csv_data, std::string> validate(mark_type_2d mark, ast::csv_data data)
+std::expected<csv_data, std::string> validate(mark_type_2d mark, ast::csv_data &&data)
 {
   return [&] -> std::expected<std::vector<expr>, std::string>
   {
@@ -308,20 +331,20 @@ std::expected<csv_data, std::string> validate(mark_type_2d mark, ast::csv_data d
                         });
 }
 
-std::expected<expr, std::string> validate(mark_type_2d mark, ast::expr e)
+std::expected<expr, std::string> validate(mark_type_2d mark, ast::expr &&e)
 {
   auto x = std::string("x");
   return validate_expression(std::move(e), {&x, 1}, false);
 }
 
-std::expected<expr, std::string> validate(mark_type_3d, ast::expr e)
+std::expected<expr, std::string> validate(mark_type_3d, ast::expr &&e)
 {
   std::string vars[]{"x", "y"};
   return validate_expression(std::move(e), vars, false);
 }
 
 std::expected<parametric_data_2d, std::string> validate(mark_type_2d m,
-                                                        ast::parametric_data_2d data)
+                                                        ast::parametric_data_2d &&data)
 {
   // TODO: implement impulses
   if (m == mark_type_2d::impulses)
@@ -342,7 +365,8 @@ std::expected<parametric_data_2d, std::string> validate(mark_type_2d m,
   }
 }
 
-std::expected<parametric_data_3d, std::string> validate(mark_type_3d, ast::parametric_data_3d data)
+std::expected<parametric_data_3d, std::string> validate(mark_type_3d,
+                                                        ast::parametric_data_3d &&data)
 {
   // TODO: check that expressions are valid
   std::string vars[] = {"u", "v"};
@@ -396,7 +420,7 @@ line_type_spec transform_lts(const ast::line_type_spec &s)
   return {.color = s.color, .width = s.width};
 }
 
-line_type_desc transform_lt(ast::line_type_desc d)
+line_type_desc transform_lt(const ast::line_type_desc &d)
 {
   return std::visit(overload([](uint32_t i) -> line_type_desc { return i; },
                              [](const ast::line_type_spec &s) -> line_type_desc
@@ -404,7 +428,7 @@ line_type_desc transform_lt(ast::line_type_desc d)
                     d);
 }
 
-std::expected<graph_desc_2d, std::string> validate(ast::graph_desc_2d graph)
+std::expected<graph_desc_2d, std::string> validate(ast::graph_desc_2d &&graph)
 {
   auto mark = transform_mark(graph.mark);
   auto data = std::visit([&](auto &&d) -> std::expected<data_source_2d, std::string>
@@ -419,7 +443,7 @@ std::expected<graph_desc_2d, std::string> validate(ast::graph_desc_2d graph)
       });
 }
 
-std::expected<graph_desc_3d, std::string> validate(ast::graph_desc_3d graph)
+std::expected<graph_desc_3d, std::string> validate(ast::graph_desc_3d &&graph)
 {
   auto mark = transform_mark(graph.mark);
   auto data = std::visit([&](auto &&d) -> std::expected<data_source_3d, std::string>
@@ -434,7 +458,7 @@ std::expected<graph_desc_3d, std::string> validate(ast::graph_desc_3d graph)
       });
 }
 
-std::expected<plot_command_2d, std::string> validate(ast::plot_command_2d plot)
+std::expected<plot_command_2d, std::string> validate(ast::plot_command_2d &&plot)
 {
   return validate_all(
              moving_range(plot.graphs)
@@ -449,7 +473,7 @@ std::expected<plot_command_2d, std::string> validate(ast::plot_command_2d plot)
           });
 }
 
-std::expected<plot_command_3d, std::string> validate(ast::plot_command_3d plot)
+std::expected<plot_command_3d, std::string> validate(ast::plot_command_3d &&plot)
 {
   return validate_all(
              moving_range(plot.graphs)
@@ -485,7 +509,23 @@ std::expected<command, std::string> parse_command(const char *cmd)
                                [](show_command &&cmd) -> std::expected<command, std::string>
                                { return std::move(cmd); },
                                [](quit_command &&cmd) -> std::expected<command, std::string>
-                               { return std::move(cmd); }),
+                               { return std::move(cmd); },
+                               [](ast::user_definition &&cmd) -> std::expected<command, std::string>
+                               {
+                                 const auto params =
+                                     cmd.params
+                                         .transform([](const std::vector<std::string> &v)
+                                                    { return std::span{v}; })
+                                         .value_or(std::span<const std::string>{});
+                                 return validate_expression(std::move(cmd.body), params, false)
+                                     .transform(
+                                         [&](expr &&body)
+                                         {
+                                           return user_definition{.name = std::move(cmd.name),
+                                                                  .params = std::move(cmd.params),
+                                                                  .body = std::move(body)};
+                                         });
+                               }),
                       std::move(*ast));
   }
   else
