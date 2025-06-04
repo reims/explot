@@ -52,6 +52,12 @@ struct parsed_decimal : lexy::token_production
       });
 };
 
+struct decimal_integer
+{
+  static constexpr auto rule = dsl::integer<uint32_t>(dsl::digits<>);
+  static constexpr auto value = lexy::as_integer<uint32_t>;
+};
+
 constexpr auto op_plus = dsl::op<ast::binary_operator::plus>(dsl::lit_c<'+'>);
 constexpr auto op_minus = dsl::op<ast::binary_operator::minus>(dsl::lit_c<'-'>);
 constexpr auto op_mult = dsl::op<ast::binary_operator::mult>(dsl::lit_c<'*'>);
@@ -470,10 +476,73 @@ struct line_type
     static constexpr auto value = lexy::forward<glm::vec4>;
   };
 
-  static constexpr auto rule = dsl::partial_combination(dsl::p<width>, dsl::p<color_directive>);
+  struct dash_type_string
+  {
+
+    static constexpr auto rule =
+        dsl::quoted(dsl::lit_c<'.'> / dsl::lit_c<'-'> / dsl::lit_c<'_'> / dsl::lit_c<' '>);
+
+    static constexpr auto value =
+        lexy::fold_inplace<dash_type>(dash_type{},
+                                      [](dash_type &result, const lexeme &l)
+                                      {
+                                        for (auto c : l)
+                                        {
+                                          switch (c)
+                                          {
+                                          case '.':
+                                            result.segments.emplace_back(2, 5);
+                                            break;
+                                          case '-':
+                                            result.segments.emplace_back(10, 10);
+                                            break;
+                                          case '_':
+                                            result.segments.emplace_back(20, 10);
+                                            break;
+                                          case ' ':
+                                            if (!result.segments.empty())
+                                            {
+                                              result.segments.back().second += 10;
+                                            }
+                                            break;
+                                          }
+                                        }
+                                      });
+  };
+
+  struct dash_type_numerical
+  {
+    struct pair
+    {
+      static constexpr auto rule = dsl::twice(dsl::p<decimal_integer>, dsl::sep(dsl::lit_c<','>));
+      static constexpr auto value = lexy::construct<std::pair<uint32_t, uint32_t>>;
+    };
+    static constexpr auto rule =
+        dsl::parenthesized(dsl::list(dsl::p<pair>, dsl::sep(dsl::lit_c<','>)));
+    static constexpr auto value =
+        lexy::as_list<std::vector<std::pair<uint32_t, uint32_t>>> >> lexy::construct<dash_type>;
+  };
+
+  struct dash_type_solid
+  {
+    static constexpr auto rule = dsl::keyword<"solid">(kw_id);
+    static constexpr auto value = lexy::constant(solid{});
+  };
+
+  struct dash_type_directive
+  {
+    static constexpr auto rule = LEXY_KEYWORD("dashtype", kw_id)
+                                 >> (dsl::p<dash_type_string> | dsl::p<dash_type_numerical>
+                                     | dsl::p<dash_type_solid> | dsl::p<decimal_integer>);
+    static constexpr auto value = lexy::construct<dash_type_desc>;
+  };
+
+  static constexpr auto rule =
+      dsl::partial_combination(dsl::p<width>, dsl::p<color_directive>, dsl::p<dash_type_directive>);
   static constexpr auto value = lexy::fold_inplace<ast::line_type_spec>(
       [] { return ast::line_type_spec{}; }, [](ast::line_type_spec &lt, float width)
-      { lt.width = width; }, [](ast::line_type_spec &lt, glm::vec4 color) { lt.color = color; });
+      { lt.width = width; }, [](ast::line_type_spec &lt, glm::vec4 color) { lt.color = color; },
+      [](ast::line_type_spec &lt, dash_type_desc dt) { lt.dash_type = dt; });
 };
 
 struct line_type_or_ref

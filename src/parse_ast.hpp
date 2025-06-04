@@ -64,6 +64,7 @@ struct line_type_spec
 {
   std::optional<glm::vec4> color;
   std::optional<float> width;
+  std::optional<dash_type_desc> dash_type;
 };
 
 using line_type_desc = std::variant<line_type_spec, uint32_t>;

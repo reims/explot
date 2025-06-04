@@ -28,6 +28,7 @@ add_executable(explot
   rx-renderers.cpp
   impulse.cpp
   user_definitions.cpp
+  prefix_sum.cpp
 )
 
 include(FetchContent)

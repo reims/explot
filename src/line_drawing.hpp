@@ -36,6 +36,19 @@ struct lines_state_2d final
   data_desc data;
 };
 
+struct dashed_line_strip_state_2d
+{
+  explicit dashed_line_strip_state_2d(data_desc data,
+                                      const std::vector<std::pair<uint32_t, uint32_t>> &dash_type);
+
+  vao_handle vao = make_vao();
+  program_handle program;
+  data_desc data;
+  vbo_handle curve_length;
+};
+void draw(const dashed_line_strip_state_2d &state, float width, const glm::mat4 &phase_to_screen,
+          const glm::mat4 &screen_to_clip, const glm::vec4 &color);
+
 lines_state_2d make_lines_state_2d(data_desc d);
 void draw(const lines_state_2d &state, float width, const glm::mat4 &phase_to_screen,
           const glm::mat4 &screen_to_clip, const glm::vec4 &color);

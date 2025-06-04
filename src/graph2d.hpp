@@ -1,9 +1,7 @@
 #pragma once
 
-#include <memory>
 #include "line_drawing.hpp"
 #include "data.hpp"
-#include "minmax.hpp"
 #include "point_drawing.hpp"
 #include <variant>
 #include "commands.hpp"
@@ -14,7 +12,8 @@ namespace explot
 {
 struct graph2d final
 {
-  using state = std::variant<points_2d_state, line_strip_state_2d, impulses_state>;
+  using state = std::variant<points_2d_state, line_strip_state_2d, dashed_line_strip_state_2d,
+                             impulses_state>;
   state graph;
   line_type lt;
   graph2d() = default;

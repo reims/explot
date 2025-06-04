@@ -417,7 +417,19 @@ mark_type_3d transform_mark(ast::mark_type_3d mark)
 
 line_type_spec transform_lts(const ast::line_type_spec &s)
 {
-  return {.color = s.color, .width = s.width};
+  auto dt = s.dash_type.and_then(
+      [](const dash_type_desc &dd) -> std::optional<dash_type>
+      {
+        if (std::holds_alternative<dash_type>(dd))
+        {
+          return std::get<dash_type>(dd);
+        }
+        else
+        {
+          return std::nullopt;
+        }
+      });
+  return {.color = s.color, .width = s.width, .dash_type = dt};
 }
 
 line_type_desc transform_lt(const ast::line_type_desc &d)
