@@ -1,8 +1,11 @@
 #include "coordinate_system_3d.hpp"
+#include <glm/gtc/type_ptr.hpp>
 #include <vector>
 #include <string>
 #include <fmt/format.h>
 #include "colors.hpp"
+#include "font_atlas.hpp"
+#include "gl-handle.hpp"
 
 namespace
 {
@@ -36,8 +39,8 @@ namespace explot
 {
 coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t num_ticks)
     : scale_to_phase(transform(clip_rect, tics.bounding_rect)),
-      lines(make_lines_state_3d(data_for_coordinate_system(num_ticks))),
-      font(make_font_atlas("+-.,0123456789eE", 10).value())
+      lines(data_for_coordinate_system(num_ticks), 1.0f, axis_color, {.phase_to_clip = 6}),
+      font(make_font_atlas("+-.,0123456789eE", 10).value()), ubo(make_vbo())
 {
   const auto &br = tics.bounding_rect;
   const auto steps = (br.upper_bounds - br.lower_bounds) / static_cast<float>(num_ticks - 1);
@@ -48,17 +51,19 @@ coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t 
   for (auto i = 0u; i < num_ticks; ++i)
   {
     const auto p = br.lower_bounds + static_cast<float>(i) * steps;
-    xlabels.emplace_back(font, format_for_tic(p.x, tics.least_significant_digit_x));
-    ylabels.emplace_back(font, format_for_tic(p.y, tics.least_significant_digit_y));
-    zlabels.emplace_back(font, format_for_tic(p.z, tics.least_significant_digit_z));
+    xlabels.emplace_back(font, format_for_tic(p.x, tics.least_significant_digit_x), text_color);
+    ylabels.emplace_back(font, format_for_tic(p.y, tics.least_significant_digit_y), text_color);
+    zlabels.emplace_back(font, format_for_tic(p.z, tics.least_significant_digit_z), text_color);
   }
+
+  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+  glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
+  glBindBufferBase(GL_UNIFORM_BUFFER, 6, ubo);
 }
 
-void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
-          const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip)
+void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
+            const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip)
 {
-  draw(cs.lines, 1.0f, phase_to_clip * cs.scale_to_phase, clip_to_screen, screen_to_clip,
-       axis_color);
   const auto num_ticks = cs.xlabels.size();
   const auto step = 2.0f / static_cast<float>(num_ticks - 1);
   const auto radius = 0.06f;
@@ -68,7 +73,7 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f + static_cast<float>(i) * step, -1.0f - radius, -1.0f, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    draw(cs.xlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
+    update(cs.xlabels[i], {offset.x, offset.y}, {0.5f, 1.0f});
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
@@ -76,7 +81,7 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f, -1.0f + static_cast<float>(i) * step, -1.0f - radius, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    draw(cs.ylabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
+    update(cs.ylabels[i], {offset.x, offset.y}, {0.5f, 1.0f});
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
@@ -84,7 +89,28 @@ void draw(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f - radius, -1.0f, -1.0f + static_cast<float>(i) * step, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    draw(cs.zlabels[i], screen_to_clip, {offset.x, offset.y}, text_color, {0.5f, 1.0f});
+    update(cs.zlabels[i], {offset.x, offset.y}, {0.5f, 1.0f});
+  }
+
+  auto axis_phase_to_clip = phase_to_clip * cs.scale_to_phase;
+  glBindBuffer(GL_UNIFORM_BUFFER, cs.ubo);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(axis_phase_to_clip));
+}
+
+void draw(const coordinate_system_3d &cs)
+{
+  draw(cs.lines);
+  for (auto &l : cs.xlabels)
+  {
+    draw(l);
+  }
+  for (auto &l : cs.ylabels)
+  {
+    draw(l);
+  }
+  for (auto &l : cs.zlabels)
+  {
+    draw(l);
   }
 }
 } // namespace explot

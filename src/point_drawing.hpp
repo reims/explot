@@ -1,6 +1,7 @@
 #pragma once
 #include "gl-handle.hpp"
 #include "data.hpp"
+#include "program.hpp"
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
@@ -12,11 +13,11 @@ struct points_2d_state final
   program_handle program;
   data_desc data;
   points_2d_state() = default;
-  explicit points_2d_state(data_desc data);
+  explicit points_2d_state(data_desc data, float width, const glm::vec4 &color, float point_width,
+                           const uniform_bindings_2d &bds = {});
 };
 
-void draw(const points_2d_state &state, float line_width, float point_width, const glm::vec4 &color,
-          const glm::mat4 &view_to_screen, const glm::mat4 &screen_to_clip);
+void draw(const points_2d_state &state);
 
 struct points_3d_state final
 {
@@ -24,11 +25,10 @@ struct points_3d_state final
   program_handle program;
   data_desc data;
   points_3d_state() = default;
-  explicit points_3d_state(data_desc data);
+  explicit points_3d_state(data_desc data, float width, const glm::vec4 &color, float point_width,
+                           const uniform_bindings_3d &bds = {});
 };
 
-void draw(const points_3d_state &state, float line_width, float point_width, const glm::vec4 &color,
-          const glm::mat4 &phase_to_clip, const glm::mat4 &clip_to_screen,
-          const glm::mat4 &screen_to_clip);
+void draw(const points_3d_state &state);
 
 } // namespace explot

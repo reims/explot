@@ -1,6 +1,8 @@
 #include "program.hpp"
+#include "gl-handle.hpp"
 #include "overload.hpp"
 #include <glm/gtc/type_ptr.hpp>
+#include <fmt/format.h>
 
 namespace explot
 {
@@ -42,6 +44,12 @@ program_handle make_program(const char *geometry_shader_src, const char *vertex_
     vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex_shader, 1, &vertex_shader_src, nullptr);
     glCompileShader(vertex_shader);
+    GLint compile_status;
+    glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &compile_status);
+    if (compile_status != GL_TRUE)
+    {
+      fmt::println("failed to compile vertex shader");
+    }
     glAttachShader(program, vertex_shader);
   }
   if (geometry_shader_src != nullptr)
@@ -49,6 +57,12 @@ program_handle make_program(const char *geometry_shader_src, const char *vertex_
     geometry_shader = glCreateShader(GL_GEOMETRY_SHADER);
     glShaderSource(geometry_shader, 1, &geometry_shader_src, nullptr);
     glCompileShader(geometry_shader);
+    GLint compile_status;
+    glGetShaderiv(geometry_shader, GL_COMPILE_STATUS, &compile_status);
+    if (compile_status != GL_TRUE)
+    {
+      fmt::println("failed to compile geometry shader");
+    }
     glAttachShader(program, geometry_shader);
   }
   if (fragment_shader_src != nullptr)
@@ -56,6 +70,12 @@ program_handle make_program(const char *geometry_shader_src, const char *vertex_
     fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment_shader, 1, &fragment_shader_src, nullptr);
     glCompileShader(fragment_shader);
+    GLint compile_status;
+    glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &compile_status);
+    if (compile_status != GL_TRUE)
+    {
+      fmt::println("failed to compile fragment shader");
+    }
     glAttachShader(program, fragment_shader);
   }
   glLinkProgram(program);

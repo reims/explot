@@ -1,9 +1,11 @@
 #include "line_drawing.hpp"
 #include "GL/glew.h"
+#include <cstdint>
 #include <glm/gtc/type_ptr.hpp>
 #include <fmt/format.h>
 #include <memory>
 #include <numbers>
+#include "gl-handle.hpp"
 #include "program.hpp"
 #include "prefix_sum.hpp"
 
@@ -14,7 +16,11 @@ using namespace explot;
 constexpr auto vertex_shader_src_2d = R"shader(#version 330 core
 layout (location = 0) in vec2 position;
 
-uniform mat4 phase_to_screen;
+uniform PhaseToScreen
+{
+  mat4 phase_to_screen;
+};
+
 
 void main()
 {
@@ -26,7 +32,10 @@ constexpr auto dashed_vertex_shader_src_2d = R"shader(#version 330 core
 layout (location = 0) in vec2 position;
 layout (location = 1) in float curve_length;
 
-uniform mat4 phase_to_screen;
+uniform PhaseToScreen
+{
+  mat4 phase_to_screen;
+};
 
 out float cl;
 
@@ -40,8 +49,14 @@ void main()
 constexpr auto vertex_shader_src_3d = R"shader(#version 330 core
 layout (location = 0) in vec3 position;
 
-uniform mat4 phase_to_clip;
-uniform mat4 clip_to_screen;
+uniform PhaseToClip
+{
+  mat4 phase_to_clip;
+};
+uniform ClipToScreen
+{
+  mat4 clip_to_screen;
+};
 
 void main()
 {
@@ -78,7 +93,11 @@ layout (lines) in;
 layout (triangle_strip, max_vertices = 30) out;
 
 uniform float width;
-uniform mat4 screen_to_clip;
+
+uniform ScreenToClip
+{
+  mat4 screen_to_clip;
+};
 uniform vec2 shape[8];
 
 out float dist;
@@ -225,8 +244,12 @@ layout (lines) in;
 layout (triangle_strip, max_vertices = 30) out;
 
 uniform float width;
-uniform mat4 screen_to_clip;
 uniform vec2 shape[8];
+
+uniform ScreenToClip
+{
+  mat4 screen_to_clip;
+};
 
 in float cl[];
 
@@ -452,26 +475,36 @@ auto shape_for_lines(uint32_t segments)
   return result;
 }
 
-auto program_for_lines_2d()
+auto program_for_lines_2d(const uniform_bindings_2d &bds = {})
 {
   auto program = make_program(lines_geometry_shader_src, vertex_shader_src_2d, fragment_shader_src);
+  auto phase_to_screen_idx = glGetUniformBlockIndex(program, "PhaseToScreen");
+  glUniformBlockBinding(program, phase_to_screen_idx, bds.phase_to_screen);
+  auto screen_to_clip_idx = glGetUniformBlockIndex(program, "ScreenToClip");
+  glUniformBlockBinding(program, screen_to_clip_idx, bds.screen_to_clip);
   auto s = shape_for_lines(3);
   glUseProgram(program);
   glUniform2fv(glGetUniformLocation(program, "shape"), 8, s.get());
   return program;
 }
 
-auto program_for_lines_3d()
+auto program_for_lines_3d(const uniform_bindings_3d &bds = {})
 {
   auto program = make_program(lines_geometry_shader_src, vertex_shader_src_3d, fragment_shader_src);
   auto s = shape_for_lines(3);
   glUseProgram(program);
   glUniform2fv(glGetUniformLocation(program, "shape"), 8, s.get());
+  auto phase_to_clip_idx = glGetUniformBlockIndex(program, "PhaseToClip");
+  glUniformBlockBinding(program, phase_to_clip_idx, bds.phase_to_clip);
+  auto screen_to_clip_idx = glGetUniformBlockIndex(program, "ScreenToClip");
+  glUniformBlockBinding(program, screen_to_clip_idx, bds.screen_to_clip);
+  auto clip_to_screen_idx = glGetUniformBlockIndex(program, "ClipToScreen");
+  glUniformBlockBinding(program, clip_to_screen_idx, bds.clip_to_screen);
+
   return program;
 }
 
-void update_curve_length(gl_id points, gl_id length, uint32_t count,
-                         const glm::mat4 &phase_to_screen)
+void update_curve_length(gl_id points, gl_id length, uint32_t count)
 {
   static constexpr auto shader = R"(#version 430 core
 
@@ -487,7 +520,10 @@ layout(std430, binding = 1) buffer block2
   float l[];
 };
 
-uniform mat4 phase_to_screen;
+uniform PhaseToScreen
+{
+  mat4 phase_to_screen;
+};
 
 void main()
 {
@@ -510,141 +546,133 @@ void main()
   glLinkProgram(program);
   glDeleteShader(compute);
 
+  auto phase_to_screen_idx = glGetUniformBlockIndex(program, "PhaseToScreen");
+  glUniformBlockBinding(program, phase_to_screen_idx, uniform_bindings_2d().phase_to_screen);
+
   glUseProgram(program);
-  glUniformMatrix4fv(glGetUniformLocation(program, "phase_to_screen"), 1, GL_FALSE,
-                     glm::value_ptr(phase_to_screen));
   glDispatchCompute(count - 1, 1, 1);
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   prefix_sum(length, count);
 }
 
-auto program_for_dashed_line_strip_2d(uint32_t num_uints)
+auto program_for_dashed_line_strip_2d(uint32_t num_uints, const uniform_bindings_2d &bds = {})
 {
   auto dashed_fragment_shader = fmt::format(dashed_fragment_shader_fmt, num_uints);
   auto program = make_program(dashed_geometry_shader, dashed_vertex_shader_src_2d,
                               dashed_fragment_shader.c_str());
+  GLint link_status;
+  glGetProgramiv(program, GL_LINK_STATUS, &link_status);
+  if (link_status != GL_TRUE)
+  {
+    fmt::println("failed to link dashed line program");
+  }
   auto s = shape_for_lines(3);
   glUseProgram(program);
   glUniform2fv(glGetUniformLocation(program, "shape"), 8, s.get());
+  auto phase_to_screen_idx = glGetUniformBlockIndex(program, "PhaseToScreen");
+  glUniformBlockBinding(program, phase_to_screen_idx, bds.phase_to_screen);
+  auto screen_to_clip_idx = glGetUniformBlockIndex(program, "ScreenToClip");
+  glUniformBlockBinding(program, screen_to_clip_idx, bds.screen_to_clip);
+
   return program;
 }
 } // namespace
 
 namespace explot
 {
-line_strip_state_2d make_line_strip_state_2d(data_desc data)
+line_strip_state_2d::line_strip_state_2d(data_desc d, float width, const glm::vec4 &color,
+                                         const uniform_bindings_2d &bds)
+    : vao(make_vao()), program(program_for_lines_2d(bds)), data(std::move(d))
 {
-  line_strip_state_2d state;
-
-  glBindVertexArray(state.vao);
-  state.program = program_for_lines_2d();
+  glBindVertexArray(vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
-  state.data = std::move(data);
-  return state;
+
+  uniform ufs[] = {{"width", width}, {"color", color}};
+  set_uniforms(program, ufs);
 }
 
-line_strip_state_3d make_line_strip_state_3d(data_desc data)
+line_strip_state_3d::line_strip_state_3d(data_desc d, float width, const glm::vec4 &color,
+                                         const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(program_for_lines_3d(bds)), data(std::move(d))
 {
-  line_strip_state_3d state;
 
-  glBindVertexArray(state.vao);
-  state.program = program_for_lines_3d();
+  glBindVertexArray(vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
-  state.data = std::move(data);
 
-  return state;
+  uniform ufs[] = {{"width", width}, {"color", color}};
+  set_uniforms(program, ufs);
 }
 
-lines_state_2d make_lines_state_2d(data_desc d)
+lines_state_2d::lines_state_2d(data_desc d, float width, const glm::vec4 &color,
+                               const uniform_bindings_2d &bds)
+    : vao(make_vao()), program(program_for_lines_2d(bds)), data(std::move(d))
 {
-  auto state = lines_state_2d();
-  state.program = program_for_lines_2d();
-  glBindVertexArray(state.vao);
-  glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
-  state.data = std::move(d);
-  return state;
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
+  uniform ufs[] = {{"width", width}, {"color", color}};
+  set_uniforms(program, ufs);
 }
 
-lines_state_3d make_lines_state_3d(data_desc d)
+lines_state_3d::lines_state_3d(data_desc d, float width, const glm::vec4 &color,
+                               const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(program_for_lines_3d(bds)), data(std::move(d))
 {
-  auto state = lines_state_3d();
-  state.program = program_for_lines_3d();
-  glBindVertexArray(state.vao);
-  glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, d.ebo);
-  state.data = std::move(d);
-  return state;
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
+  uniform ufs[] = {{"width", width}, {"color", color}};
+  set_uniforms(program, ufs);
 }
 
-void draw(const line_strip_state_2d &state, float width, const glm::mat4 &phase_to_screen,
-          const glm::mat4 &screen_to_clip, const glm::vec4 &color)
+void draw(const line_strip_state_2d &state)
 {
   glBindVertexArray(state.vao);
-  uniform ufs[] = {{"width", width},
-                   {"phase_to_screen", phase_to_screen},
-                   {"screen_to_clip", screen_to_clip},
-                   {"color", color}};
-  set_uniforms(state.program, ufs);
+  glUseProgram(state.program);
   glMultiDrawElements(GL_LINE_STRIP, state.data.count.data(), GL_UNSIGNED_INT,
                       reinterpret_cast<const void *const *>(state.data.starts.data()),
                       state.data.count.size());
 }
 
-void draw(const line_strip_state_3d &state, float width, const glm::mat4 &phase_to_clip,
-          const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip, const glm::vec4 &color)
+void draw(const line_strip_state_3d &state)
 {
   glBindVertexArray(state.vao);
-  uniform ufs[] = {{"width", width},
-                   {"phase_to_clip", phase_to_clip},
-                   {"clip_to_screen", clip_to_screen},
-                   {"screen_to_clip", screen_to_clip},
-                   {"color", color}};
-  set_uniforms(state.program, ufs);
+  glUseProgram(state.program);
   glMultiDrawElements(GL_LINE_STRIP, state.data.count.data(), GL_UNSIGNED_INT,
                       reinterpret_cast<const void *const *>(state.data.starts.data()),
                       state.data.count.size());
 }
 
-void draw(const lines_state_2d &state, float width, const glm::mat4 &phase_to_screen,
-          const glm::mat4 &screen_to_clip, const glm::vec4 &color)
+void draw(const lines_state_2d &state)
 {
   glBindVertexArray(state.vao);
-  uniform ufs[] = {{"width", width},
-                   {"phase_to_screen", phase_to_screen},
-                   {"screen_to_clip", screen_to_clip},
-                   {"color", color}};
-  set_uniforms(state.program, ufs);
+  glUseProgram(state.program);
   glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_points));
 }
 
-void draw(const lines_state_3d &state, float width, const glm::mat4 &phase_to_clip,
-          const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip, const glm::vec4 &color)
+void draw(const lines_state_3d &state)
 {
   glBindVertexArray(state.vao);
-  uniform ufs[] = {{"width", width},
-                   {"phase_to_clip", phase_to_clip},
-                   {"clip_to_screen", clip_to_screen},
-                   {"screen_to_clip", screen_to_clip},
-                   {"color", color}};
-  set_uniforms(state.program, ufs);
+  glUseProgram(state.program);
   glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_points));
 }
 
 dashed_line_strip_state_2d::dashed_line_strip_state_2d(
-    data_desc d, const std::vector<std::pair<uint32_t, uint32_t>> &dash_type)
-    : data(std::move(d)), curve_length(make_vbo())
+    data_desc d, const std::vector<std::pair<uint32_t, uint32_t>> &dash_type, float width,
+    const glm::vec4 &color, const uniform_bindings_2d &bds)
+    : vao(make_vao()), data(std::move(d)), curve_length(make_vbo())
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, curve_length);
@@ -685,22 +713,23 @@ dashed_line_strip_state_2d::dashed_line_strip_state_2d(
     }
     num_segments += space;
   }
-  program = program_for_dashed_line_strip_2d(static_cast<uint32_t>(segments.size()));
-  uniform ufs[] = {{"num_segments", num_segments}, {"segments", segments}};
+  program = program_for_dashed_line_strip_2d(static_cast<uint32_t>(segments.size()), bds);
+  uniform ufs[] = {{"num_segments", num_segments},
+                   {"segments", segments},
+                   {"width", width},
+                   {"color", color}};
   set_uniforms(program, ufs);
 }
 
-void draw(const dashed_line_strip_state_2d &state, float width, const glm::mat4 &phase_to_screen,
-          const glm::mat4 &screen_to_clip, const glm::vec4 &color)
+void update(const dashed_line_strip_state_2d &state)
 {
-  update_curve_length(state.data.vbo, state.curve_length, state.data.num_points, phase_to_screen);
+  update_curve_length(state.data.vbo, state.curve_length, state.data.num_points);
+}
+
+void draw(const dashed_line_strip_state_2d &state)
+{
   glBindVertexArray(state.vao);
   glUseProgram(state.program);
-  uniform ufs[] = {{"width", width},
-                   {"phase_to_screen", phase_to_screen},
-                   {"screen_to_clip", screen_to_clip},
-                   {"color", color}};
-  set_uniforms(state.program, ufs);
   glMultiDrawElements(GL_LINE_STRIP, state.data.count.data(), GL_UNSIGNED_INT,
                       reinterpret_cast<const void *const *>(state.data.starts.data()),
                       state.data.count.size());

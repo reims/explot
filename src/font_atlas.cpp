@@ -1,4 +1,5 @@
 #include "font_atlas.hpp"
+#include "gl-handle.hpp"
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/vec4.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -17,7 +18,7 @@ namespace
 {
 using namespace explot;
 
-static constexpr auto string_vertex_shader_src = R"shader(#version 330 core
+static constexpr auto string_vertex_shader_src = R"shader(#version 430 core
 layout (location = 0) in vec2 uv_lower_bounds;
 layout (location = 1) in vec2 uv_dimensions;
 layout (location = 2) in vec2 screen_lower_bounds;
@@ -26,7 +27,12 @@ layout (location = 4) in vec2 pos;
 out vec2 uv;
 
 uniform vec2 offset;
-uniform mat4 screen_to_clip;
+
+layout(binding = 1) uniform GeometryTransforms
+{
+  mat4 screen_to_clip;
+};
+
 
 void main()
 {
@@ -250,7 +256,7 @@ std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
   return std::nullopt;
 }
 
-gl_string::gl_string(const font_atlas &atlas, std::string_view str)
+gl_string::gl_string(const font_atlas &atlas, std::string_view str, const glm::vec4 &color)
     : size(static_cast<uint32_t>(str.size())), vao(make_vao()), uv_coordinates(make_vbo()),
       screen_coordinates(make_vbo()), tex_vbo(make_tex_vbo()), texture(atlas.texture),
       program(make_string_program())
@@ -316,23 +322,25 @@ gl_string::gl_string(const font_atlas &atlas, std::string_view str)
   glEnableVertexAttribArray(4);
   lower_bounds = glm::vec2(0.0f, y_lower_bound);
   upper_bounds = glm::vec2(width, y_upper_bound);
+  glUseProgram(program);
+  glUniform4fv(glGetUniformLocation(program, "color"), 1, glm::value_ptr(color));
 }
 
-void draw(const gl_string &str, const glm::mat4 &screen_to_clip, const glm::vec2 &offset,
-          const glm::vec4 &color, const glm::vec2 &anchor)
+void draw(const gl_string &str)
 {
   // fmt::print("draw string\n");
   glBindVertexArray(str.vao);
   glBindTexture(GL_TEXTURE_RECTANGLE, str.texture);
   glUseProgram(str.program);
-  // a * (u - l) = au - al
+  glDrawArraysInstanced(GL_TRIANGLES, 0, num_points, str.size);
+}
+
+void update(const gl_string &str, const glm::vec2 &offset, const glm::vec2 &anchor)
+{
   const auto offset_with_anchor =
       glm::floor(offset - anchor * str.upper_bounds - (1.0f - anchor) * str.lower_bounds);
-  glUniformMatrix4fv(glGetUniformLocation(str.program, "screen_to_clip"), 1, GL_FALSE,
-                     glm::value_ptr(screen_to_clip));
+  glUseProgram(str.program);
   glUniform2fv(glGetUniformLocation(str.program, "offset"), 1, glm::value_ptr(offset_with_anchor));
-  glUniform4fv(glGetUniformLocation(str.program, "color"), 1, glm::value_ptr(color));
-  glDrawArraysInstanced(GL_TRIANGLES, 0, num_points, str.size);
 }
 
 void draw(const font_atlas &atlas, const glm::mat4 &screen_to_clip, const glm::vec2 &offset)

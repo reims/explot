@@ -1,23 +1,40 @@
 #include "drag_renderer.hpp"
 #include "data.hpp"
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/string_cast.hpp>
+#include "gl-handle.hpp"
+#include "line_drawing.hpp"
+#include <glm/gtc/type_ptr.hpp>
 #include "colors.hpp"
+
+namespace
+{
+using namespace explot;
+auto data_for_drag_renderer()
+{
+  float data[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+  return data_for_span(data, 2);
+}
+
+} // namespace
 
 namespace explot
 {
-drag_render_state make_drag_render_state()
+
+drag_render_state::drag_render_state()
+    : lines(data_for_drag_renderer(), 1.0f, selection_color, {.phase_to_screen = 5}),
+      ubo(make_vbo())
 {
-  float data[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
-  auto d = data_for_span(data, 2);
-  return drag_render_state{.lines = make_line_strip_state_2d(std::move(d))};
+  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+  glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
+  glBindBufferBase(GL_UNIFORM_BUFFER, 5, ubo);
 }
 
-void draw(const drag_render_state &s, const rect &d, const glm::mat4 &screen_to_clip, float width)
+void draw(const drag_render_state &s, const rect &d)
 {
   static constexpr auto view =
       rect{.lower_bounds = {0.0f, 0.0f, -1.0f}, .upper_bounds = {1.0f, 1.0f, 1.0f}};
   auto view_to_screen = transform(view, d);
-  draw(s.lines, width, view_to_screen, screen_to_clip, selection_color);
+  glBindBuffer(GL_UNIFORM_BUFFER, s.ubo);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(view_to_screen));
+  draw(s.lines);
 }
 } // namespace explot

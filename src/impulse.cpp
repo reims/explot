@@ -2,10 +2,11 @@
 
 namespace explot
 {
-void draw(const impulses_state &s, float width, const glm::mat4 &phase_to_screen,
-          const glm::mat4 &screen_to_clip, const glm::vec4 &color)
+void draw(const impulses_state &s) { draw(s.lines); }
+
+impulses_state::impulses_state(data_desc d, float width, const glm::vec4 &color)
+    : lines(reshape(std::move(d), 2), width, color)
 {
-  draw(s.lines, width, phase_to_screen, screen_to_clip, color);
 }
 
 } // namespace explot

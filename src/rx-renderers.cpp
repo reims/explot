@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include "coordinate_system_2d.hpp"
+#include <fmt/format.h>
 
 namespace
 {
@@ -45,7 +47,7 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                           [cmd = std::move(cmd)]()
                           {
                             return rx::resource<plot_with_view_space>(
-                                plot_with_view_space(make_plot2d(cmd)));
+                                plot_with_view_space(plot2d(cmd)));
                           },
                           [=](rx::resource<plot_with_view_space> res)
                           {
@@ -86,9 +88,10 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                 | rx::transform(
                                     [timebase = const_get(res).plot.timebase](const tics_desc &r)
                                     {
-                                      return std::make_shared<coordinate_system_2d>(
-                                          make_coordinate_system_2d(r, 5, timebase));
-                                    });
+                                      return std::make_shared<coordinate_system_2d>(r, 5, 9.0f,
+                                                                                    2.0f, timebase);
+                                    })
+                                | rx::publish() | rx::ref_count();
                             auto drag_renderer =
                                 drags()
                                 | rx::transform(
@@ -98,7 +101,7 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                                  []()
                                                  {
                                                    return rx::resource<drag_render_state>(
-                                                       make_drag_render_state());
+                                                       drag_render_state());
                                                  },
                                                  [=](rx::resource<drag_render_state> res)
                                                  {
@@ -113,8 +116,7 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                                                     transform(screen, clip_rect);
                                                                 draw(const_get(res),
                                                                      drag_to_rect(
-                                                                         d, screen.upper_bounds.y),
-                                                                     screen_to_clip, 1.0f);
+                                                                         d, screen.upper_bounds.y));
                                                                 return unit{};
                                                               },
                                                               screen_space, ds);
@@ -123,18 +125,32 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                     })
                                 | rx::switch_on_next();
 
+                            auto updates =
+                                view_space.combine_latest(screen_space)
+                                    .observe_on(on_run_loop)
+                                    .with_latest_from(
+                                        [res](const std::tuple<rect, rect> &views,
+                                              const std::shared_ptr<coordinate_system_2d> &cs)
+                                        {
+                                          auto &[view, screen] = views;
+                                          update(const_get(res).plot, screen, view);
+                                          auto view_to_screen = transform(view, screen);
+                                          auto screen_to_clip = transform(screen, clip_rect);
+                                          update(*cs, view_to_screen, screen_to_clip);
+                                          return unit{};
+                                        },
+                                        coordinate_systems);
+
                             return frames | rx::observe_on(on_run_loop)
                                    | rx::with_latest_from(
-                                       [res](unit, const rect &screen, const rect &view,
+                                       [res](unit, unit,
                                              const std::shared_ptr<coordinate_system_2d> &cs)
                                        {
-                                         auto view_to_screen = transform(view, screen);
-                                         auto screen_to_clip = transform(screen, clip_rect);
-                                         draw(const_get(res).plot, screen, view);
-                                         draw(*cs, view_to_screen, screen_to_clip, 1.0f, 5.0f);
+                                         draw(const_get(res).plot);
+                                         draw(*cs);
                                          return unit{};
                                        },
-                                       screen_space, view_space, coordinate_systems)
+                                       updates, coordinate_systems)
                                    | rx::merge(drag_renderer);
                           })
                       | rx::subscribe_on(on_run_loop) | rx::as_dynamic();
@@ -182,18 +198,27 @@ rx::observable<rx::observable<unit>> splot_renderer(rx::observe_on_one_worker &o
                return rx::scope([cmd = std::move(cmd)]() { return rx::resource(plot3d(cmd)); },
                                 [=](rx::resource<plot3d> res)
                                 {
+                                  auto updates =
+                                      rots.combine_latest(screen_space)
+                                          .observe_on(on_run_loop)
+                                          .transform(
+                                              [res](const std::tuple<glm::mat4, rect> &views)
+                                              {
+                                                auto &[rot, screen] = views;
+                                                auto dir = glm::transpose(rot)
+                                                           * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+                                                update(const_get(res), -4.0f * glm::vec3(dir), rot,
+                                                       screen);
+                                                return unit{};
+                                              });
                                   return frames | rx::observe_on(on_run_loop)
                                          | rx::with_latest_from(
-                                             [res = std::move(res)](unit, const rect &screen,
-                                                                    const glm::mat4 &rot)
+                                             [res](unit, unit)
                                              {
-                                               auto dir = glm::transpose(rot)
-                                                          * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-                                               draw(const_get(res), -4.0f * glm::vec3(dir), rot,
-                                                    screen);
+                                               draw(const_get(res));
                                                return unit{};
                                              },
-                                             screen_space, rots);
+                                             updates);
                                 })
                       | rx::subscribe_on(on_run_loop) | rx::as_dynamic();
              });

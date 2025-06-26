@@ -23,6 +23,6 @@ struct graph2d final
   graph2d &operator=(graph2d &&) = default;
 };
 
-// graph2d make_graph2d(std::shared_ptr<data_desc> data, mark_type mark);
-void draw(const graph2d &graph, const glm::mat4 &view_to_screen, const glm::mat4 &screen_to_clip);
+void update(const graph2d &graph);
+void draw(const graph2d &graph);
 } // namespace explot

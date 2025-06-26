@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gl-handle.hpp"
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <variant>
 #include <span>
@@ -17,5 +18,18 @@ using uniform_value = std::variant<float, glm::vec4, glm::vec2, glm::mat4, uint3
 using uniform = std::pair<const char *, uniform_value>;
 
 void set_uniforms(gl_id program, std::span<const uniform> uniforms);
+
+struct uniform_bindings_2d
+{
+  uint32_t phase_to_screen = 0;
+  uint32_t screen_to_clip = 1;
+};
+
+struct uniform_bindings_3d
+{
+  uint32_t phase_to_clip = 0;
+  uint32_t screen_to_clip = 1;
+  uint32_t clip_to_screen = 2;
+};
 
 } // namespace explot

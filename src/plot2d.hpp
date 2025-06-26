@@ -1,25 +1,25 @@
 #pragma once
 
-#include <memory>
 #include <vector>
 #include "rect.hpp"
-#include "coordinate_system_2d.hpp"
 #include "graph2d.hpp"
 #include "commands.hpp"
 #include "legend.hpp"
-#include <chrono>
 #include "csv.hpp"
 
 namespace explot
 {
-struct plot2d final
+struct plot2d
 {
+  plot2d(const plot_command_2d &cmd);
   rect phase_space;
   std::vector<graph2d> graphs;
   legend legend;
   time_point timebase;
+  vbo_handle transforms;
+  plot2d(const plot_command_2d &cmd, const std::vector<line_type> &lts);
 };
 
-plot2d make_plot2d(const plot_command_2d &cmd);
-void draw(const plot2d &plot, const rect &screen, const rect &view);
+void update(const plot2d &plot, const rect &screen, const rect &view);
+void draw(const plot2d &plot);
 } // namespace explot

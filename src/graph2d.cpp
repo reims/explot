@@ -10,18 +10,19 @@ graph2d::graph2d(data_desc data, mark_type_2d mark, line_type lt)
             switch (mark)
             {
             case mark_type_2d::points:
-              return points_2d_state(std::move(data));
+              return points_2d_state(std::move(data), lt.width, lt.color, 9);
             case mark_type_2d::lines:
               if (lt.dash_type)
               {
-                return dashed_line_strip_state_2d(std::move(data), lt.dash_type->segments);
+                return dashed_line_strip_state_2d(std::move(data), lt.dash_type->segments, lt.width,
+                                                  lt.color);
               }
               else
               {
-                return make_line_strip_state_2d(std::move(data));
+                return line_strip_state_2d(std::move(data), lt.width, lt.color);
               }
             case mark_type_2d::impulses:
-              return impulses_state(std::move(data));
+              return impulses_state(std::move(data), lt.width, lt.color);
             }
             throw "bad";
           }()),
@@ -29,18 +30,20 @@ graph2d::graph2d(data_desc data, mark_type_2d mark, line_type lt)
 {
 }
 
-void draw(const graph2d &graph, const glm::mat4 &view_to_screen, const glm::mat4 &screen_to_clip)
+void update(const graph2d &graph)
 {
-  std::visit(
-      overload([&](const points_2d_state &s)
-               { draw(s, graph.lt.width, 9.0f, graph.lt.color, view_to_screen, screen_to_clip); },
-               [&](const line_strip_state_2d &s)
-               { draw(s, graph.lt.width, view_to_screen, screen_to_clip, graph.lt.color); },
-               [&](const dashed_line_strip_state_2d &s)
-               { draw(s, graph.lt.width, view_to_screen, screen_to_clip, graph.lt.color); },
-               [&](const impulses_state &s)
-               { draw(s, graph.lt.width, view_to_screen, screen_to_clip, graph.lt.color); }),
-      graph.graph);
+  std::visit(overload([&](const points_2d_state &s) {}, [&](const line_strip_state_2d &s) {},
+                      [&](const dashed_line_strip_state_2d &s) { update(s); },
+                      [&](const impulses_state &s) {}),
+             graph.graph);
+}
+
+void draw(const graph2d &graph)
+{
+  std::visit(overload([&](const points_2d_state &s) { draw(s); }, [&](const line_strip_state_2d &s)
+                      { draw(s); }, [&](const dashed_line_strip_state_2d &s) { draw(s); },
+                      [&](const impulses_state &s) { draw(s); }),
+             graph.graph);
 }
 
 } // namespace explot

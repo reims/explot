@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <cassert>
 #include "data.hpp"
+#include "gl-handle.hpp"
 #include "minmax.hpp"
 
 namespace
@@ -53,14 +54,20 @@ namespace explot
 {
 plot3d::plot3d(const plot_command_3d &cmd, std::span<const line_type> lts)
     : graphs(graphs_for_descs(cmd, lts, data_for_plot(cmd))),
-      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7), legend(cmd.graphs, lts)
+      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7), legend(cmd.graphs, lts),
+      ubo(make_vbo())
 {
+  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+  glBufferData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
+  glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, sizeof(glm::mat4));
+  glBindBufferRange(GL_UNIFORM_BUFFER, 1, ubo, sizeof(glm::mat4), sizeof(glm::mat4));
+  glBindBufferRange(GL_UNIFORM_BUFFER, 2, ubo, 2 * sizeof(glm::mat4), sizeof(glm::mat4));
 }
 
 plot3d::plot3d(const plot_command_3d &cmd) : plot3d(cmd, resolve_line_types(cmd.graphs)) {}
 
-void draw(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,
-          const rect &screen)
+void update(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,
+            const rect &screen)
 {
   const auto width = static_cast<float>(screen.upper_bounds.x - screen.lower_bounds.x);
   const auto height = static_cast<float>(screen.upper_bounds.y - screen.lower_bounds.y);
@@ -70,13 +77,22 @@ void draw(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &vie
   const auto pre_translation = glm::translate(glm::identity<glm::mat4>(), -view_origin);
   const auto phase_to_view = view_rotation * pre_translation * phase_to_std_view;
 
-  const auto screen_to_clip = transform(screen, clip_rect);
-  const auto clip_to_screen = transform(clip_rect, screen);
+  glm::mat4 ufs[] = {view_to_clip * phase_to_view, transform(screen, clip_rect),
+                     transform(clip_rect, screen)};
+
+  glBindBuffer(GL_UNIFORM_BUFFER, plot.ubo);
+  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(ufs), ufs);
+  update(plot.legend, screen);
+  update(plot.cs, ufs[0], ufs[2], ufs[1]);
+}
+
+void draw(const plot3d &plot)
+{
   for (const auto &g : plot.graphs)
   {
-    draw(g, phase_to_view, view_to_clip, clip_to_screen, screen_to_clip);
+    draw(g);
   }
-  draw(plot.cs, view_to_clip * phase_to_view, clip_to_screen, screen_to_clip);
-  draw(plot.legend, screen, screen_to_clip);
+  draw(plot.cs);
+  draw(plot.legend);
 }
 } // namespace explot
