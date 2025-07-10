@@ -18,6 +18,7 @@ struct coordinate_system_2d final
   rect bounding_rect;
   program_handle program_for_ticks;
   vao_handle vao_for_ticks;
+  vbo_handle vbo_for_axis;
   lines_state_2d axis;
   std::vector<gl_string> x_labels;
   std::vector<gl_string> y_labels;

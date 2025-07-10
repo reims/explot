@@ -11,6 +11,7 @@ namespace explot
 struct coordinate_system_3d final
 {
   glm::mat4 scale_to_phase;
+  vbo_handle vbo;
   lines_state_3d lines;
   font_atlas font;
   std::vector<gl_string> xlabels;

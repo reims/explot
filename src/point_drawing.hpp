@@ -7,14 +7,14 @@
 
 namespace explot
 {
-struct points_2d_state final
+struct points_2d_state
 {
   vao_handle vao;
   program_handle program;
-  data_desc data;
+  draw_info data;
   points_2d_state() = default;
-  explicit points_2d_state(data_desc data, float width, const glm::vec4 &color, float point_width,
-                           const uniform_bindings_2d &bds = {});
+  explicit points_2d_state(gl_id vbo, const seq_data_desc &d, float width, const glm::vec4 &color,
+                           float point_width, const uniform_bindings_2d &bds = {});
 };
 
 void draw(const points_2d_state &state);
@@ -23,10 +23,12 @@ struct points_3d_state final
 {
   vao_handle vao;
   program_handle program;
-  data_desc data;
+  draw_info data;
   points_3d_state() = default;
-  explicit points_3d_state(data_desc data, float width, const glm::vec4 &color, float point_width,
-                           const uniform_bindings_3d &bds = {});
+  explicit points_3d_state(gl_id vbo, const seq_data_desc &d, float width, const glm::vec4 &color,
+                           float point_width, const uniform_bindings_3d &bds = {});
+  explicit points_3d_state(gl_id vbo, const grid_data_desc &d, float width, const glm::vec4 &color,
+                           float point_width, const uniform_bindings_3d &bds = {});
 };
 
 void draw(const points_3d_state &state);

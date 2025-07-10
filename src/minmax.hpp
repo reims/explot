@@ -1,13 +1,13 @@
 #pragma once
 
-#include "data.hpp"
+#include "gl-handle.hpp"
 #include "rect.hpp"
 
 namespace explot
 {
-rect bounding_rect_2d(const data_desc &d, uint32_t stride);
-rect bounding_rect_3d(const data_desc &d, uint32_t stride);
-glm::vec2 minmax_x(const data_desc &d, uint32_t stride);
-glm::vec2 minmax_y(const data_desc &d, uint32_t stride);
-glm::vec2 minmax_z(const data_desc &d, uint32_t stride);
+rect bounding_rect_2d(gl_id vbo, uint32_t num_points);
+rect bounding_rect_3d(gl_id vbo, uint32_t num_points);
+glm::vec2 minmax_x(gl_id vbo, uint32_t num_points, uint32_t point_size);
+glm::vec2 minmax_y(gl_id vbo, uint32_t num_points, uint32_t point_size);
+glm::vec2 minmax_z(gl_id vbo, uint32_t num_points, uint32_t point_size);
 } // namespace explot

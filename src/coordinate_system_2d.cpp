@@ -122,11 +122,10 @@ auto make_program_for_ticks()
   return program;
 }
 
-lines_state_2d make_axis(const tics_desc &tics)
+lines_state_2d make_axis(gl_id vbo, const tics_desc &tics)
 {
   auto d = data_for_axes(tics.bounding_rect.lower_bounds, tics.bounding_rect.upper_bounds);
-  auto data = data_for_span(d, 2);
-  return lines_state_2d(std::move(data), 1.0f, axis_color);
+  return lines_state_2d(vbo, data_for_span(vbo, d, 2), 1.0f, axis_color);
 }
 } // namespace
 namespace explot
@@ -134,7 +133,8 @@ namespace explot
 coordinate_system_2d::coordinate_system_2d(const tics_desc &tics, uint32_t num_ticks,
                                            float tick_size, float width, time_point timebase)
     : num_ticks(num_ticks), tick_size(tick_size), bounding_rect(tics.bounding_rect),
-      program_for_ticks(make_program_for_ticks()), vao_for_ticks(make_vao()), axis(make_axis(tics)),
+      program_for_ticks(make_program_for_ticks()), vao_for_ticks(make_vao()),
+      vbo_for_axis(make_vbo()), axis(make_axis(vbo_for_axis, tics)),
       atlas(*make_font_atlas("0123456789.,+-:abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
                              10))
 {

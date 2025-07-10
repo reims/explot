@@ -23,8 +23,9 @@ plot2d::plot2d(const plot_command_2d &cmd, const std::vector<line_type> &lts)
   for (std::size_t i = 0; i < cmd.graphs.size(); ++i)
   {
     const auto &g = cmd.graphs[i];
-    auto br = bounding_rect_2d(data[i], 2);
-    graphs.emplace_back(std::move(data[i]), g.mark, lts[i]);
+    auto &[vbo, desc] = data[i];
+    auto br = bounding_rect_2d(vbo, desc.num_points);
+    graphs.emplace_back(std::move(vbo), desc, g.mark, lts[i]);
     bounding = union_rect(bounding.value_or(br), br);
   }
   phase_space = bounding.value_or(clip_rect);

@@ -12,7 +12,7 @@ namespace
 {
 using namespace explot;
 auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lts,
-                      std::vector<data_desc> &&data)
+                      std::vector<std::tuple<vbo_handle, data_desc>> &&data)
 {
   const auto &descs = plot.graphs;
   auto result = std::vector<graph3d>();
@@ -20,7 +20,8 @@ auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lt
 
   for (auto i = 0U; i < descs.size(); ++i)
   {
-    result.emplace_back(std::move(data[i]), descs[i].mark, lts[i]);
+    result.emplace_back(std::move(std::get<0>(data[i])), std::get<1>(data[i]), descs[i].mark,
+                        lts[i]);
   }
 
   return result;
@@ -28,8 +29,8 @@ auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lt
 
 auto bounding_rect(const graph3d &g)
 {
-  return bounding_rect_3d(
-      std::visit([](const auto &s) -> const data_desc & { return s.data; }, g.graph), 3);
+  return bounding_rect_3d(g.vbo,
+                          std::visit([](const auto &s) { return s.data.num_indices; }, g.graph));
 }
 
 auto bounding_rect_for_graphs(std::span<const graph3d> graphs)

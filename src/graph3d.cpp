@@ -5,14 +5,16 @@
 namespace
 {
 using namespace explot;
-graph3d::state make_state(data_desc data, mark_type_3d mark, const line_type &lt)
+graph3d::state make_state(gl_id vbo, const data_desc &data, mark_type_3d mark, const line_type &lt)
 {
   switch (mark)
   {
   case mark_type_3d::lines:
-    return line_strip_state_3d(std::move(data), lt.width, lt.color);
+    return std::visit([&](const auto &d)
+                      { return line_strip_state_3d(vbo, d, lt.width, lt.color); }, data);
   case mark_type_3d::points:
-    return points_3d_state(std::move(data), lt.width, lt.color, 9.0f);
+    return std::visit([&](const auto &d)
+                      { return points_3d_state(vbo, d, lt.width, lt.color, 9.0f); }, data);
   }
   throw 0;
 }
@@ -20,8 +22,8 @@ graph3d::state make_state(data_desc data, mark_type_3d mark, const line_type &lt
 
 namespace explot
 {
-graph3d::graph3d(data_desc data, mark_type_3d mark, line_type lt)
-    : graph(make_state(std::move(data), mark, lt)), lt(lt)
+graph3d::graph3d(vbo_handle v, const data_desc &data, mark_type_3d mark, line_type lt)
+    : vbo(std::move(v)), graph(make_state(vbo, data, mark, lt)), lt(lt)
 {
 }
 

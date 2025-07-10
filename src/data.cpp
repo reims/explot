@@ -1,5 +1,7 @@
 #include "data.hpp"
+#include "commands.hpp"
 #include "gl-handle.hpp"
+#include <cstdint>
 #include <fmt/ranges.h>
 #include "csv.hpp"
 #include <array>
@@ -14,6 +16,7 @@
 #include <utility>
 #include <algorithm>
 #include <map>
+#include <vector>
 #include "user_definitions.hpp"
 
 using namespace std::literals;
@@ -446,28 +449,13 @@ std::vector<int> grid_indices_for_lines(uint32_t num_points, uint32_t num_column
   return result;
 }
 
-data_desc grid_data_for_lines(vbo_handle vbo, uint32_t num_points, uint32_t num_columns)
-{
-  auto indices = grid_indices_for_lines(num_points, num_columns);
-  auto ebo = make_vbo();
-  glBindVertexArray(0);
-  glBindBuffer(GL_ARRAY_BUFFER, ebo);
-  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
-  assert(num_points % num_columns == 0);
-  auto num_rows = num_points / num_columns;
-  auto count = std::vector<GLsizei>();
-  count.reserve(num_columns + num_rows);
-  std::fill_n(std::back_inserter(count), num_columns, num_rows);
-  std::fill_n(std::back_inserter(count), num_rows, num_columns);
-  return data_desc(std::move(vbo), 3, std::move(count), std::move(ebo), num_points);
-}
-
 struct row_data
 {
   std::string filename;
   std::optional<uint32_t> columns;
   std::vector<int> indices;
-  data_desc data;
+  uint32_t num_points;
+  vbo_handle vbo;
 };
 
 std::pair<std::vector<row_data>, time_point>
@@ -511,9 +499,8 @@ row_data_for_graphs(const std::span<const graph_desc_2d> gs)
       glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
       glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
     }
-    result.emplace_back(std::string(f), std::nullopt, std::move(indices),
-                        data_desc(std::move(csv_vbo),
-                                  std::max(1u, static_cast<uint32_t>(indices.size())), num_points));
+    result.emplace_back(std::string(f), std::nullopt, std::move(indices), num_points,
+                        std::move(csv_vbo));
   }
   return std::make_pair(std::move(result), timebase.value_or(time_point()));
 }
@@ -558,8 +545,8 @@ row_data_for_graphs(const std::span<const graph_desc_3d> gs)
       glBindVertexArray(0);
       glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
       glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
-      result.emplace_back(std::string(f), columns, std::move(indices),
-                          data_desc(std::move(csv_vbo), 3, num_points));
+      result.emplace_back(std::string(f), columns, std::move(indices), num_points,
+                          std::move(csv_vbo));
     }
     else
     {
@@ -584,8 +571,8 @@ row_data_for_graphs(const std::span<const graph_desc_3d> gs)
         glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
         glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
       }
-      result.emplace_back(std::string(f), std::nullopt, std::move(indices),
-                          data_desc(std::move(csv_vbo), std::max(1u, num_indices), num_points));
+      result.emplace_back(std::string(f), std::nullopt, std::move(indices), num_points,
+                          std::move(csv_vbo));
     }
   }
   return std::make_pair(std::move(result), timebase.value_or(time_point()));
@@ -594,10 +581,10 @@ row_data_for_graphs(const std::span<const graph_desc_3d> gs)
 vbo_handle data_for_using_expressions(std::span<const expr> exprs, const row_data &r)
 {
   const auto num_indices = r.indices.size();
-  const auto num_points = r.data.num_points;
+  const auto num_points = r.num_points;
   auto vao = make_vao();
   glBindVertexArray(vao);
-  auto &csv_vbo = r.data.vbo;
+  auto &csv_vbo = r.vbo;
   glBindBuffer(GL_ARRAY_BUFFER, csv_vbo);
   for (auto i = 0U; i < num_indices; ++i)
   {
@@ -618,8 +605,8 @@ vbo_handle data_for_using_expressions(std::span<const expr> exprs, const row_dat
   return data_vbo;
 }
 
-data_desc data_for_expression_2d(mark_type_2d m, const expr &e, uint32_t num_points,
-                                 range_setting xrange)
+std::tuple<vbo_handle, seq_data_desc>
+data_for_expression_2d(mark_type_2d m, const expr &e, uint32_t num_points, range_setting xrange)
 {
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           xrange.lower_bound.value_or(-10.0f));
@@ -627,7 +614,9 @@ data_desc data_for_expression_2d(mark_type_2d m, const expr &e, uint32_t num_poi
                           xrange.upper_bound.value_or(10.0f));
   const auto step_x = (max_x - min_x) / static_cast<float>(num_points - 1);
   auto vao = make_vao();
-  auto exprs = std::vector<expr>{var("x"), e};
+  auto exprs = m == mark_type_2d::impulses
+                   ? std::vector<expr>{var("x"), literal_expr(0.0f), var("x"), e}
+                   : std::vector<expr>{var("x"), e};
   auto program = program_for_functional_data_2d(exprs);
   auto vbo = make_vbo();
   glBindVertexArray(vao);
@@ -643,10 +632,12 @@ data_desc data_for_expression_2d(mark_type_2d m, const expr &e, uint32_t num_poi
   glEndTransformFeedback();
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
 
-  return data_desc(std::move(vbo), static_cast<uint32_t>(exprs.size()), num_points);
+  return std::make_tuple(std::move(vbo),
+                         seq_data_desc(static_cast<uint32_t>(exprs.size()), num_points));
 }
 
-data_desc data_for_parametric_2d(const expr (&exprs)[2], uint32_t num_points, range_setting trange)
+std::tuple<vbo_handle, seq_data_desc>
+data_for_parametric_2d(const expr (&exprs)[2], uint32_t num_points, range_setting trange)
 {
   auto min_t = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           trange.lower_bound.value_or(-10.0f));
@@ -668,12 +659,12 @@ data_desc data_for_parametric_2d(const expr (&exprs)[2], uint32_t num_points, ra
   glEndTransformFeedback();
   glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
 
-  return data_desc(std::move(vbo), 2, num_points);
+  return std::make_tuple(std::move(vbo), seq_data_desc(2, num_points));
 }
 
-data_desc data_for_expression_3d(const expr &expr, samples_setting isosamples,
-                                 samples_setting samples, range_setting xrange,
-                                 range_setting yrange)
+std::tuple<vbo_handle, seq_data_desc>
+data_for_expression_3d(const expr &expr, samples_setting isosamples, samples_setting samples,
+                       range_setting xrange, range_setting yrange)
 {
   auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           xrange.lower_bound.value_or(-10.0f));
@@ -723,12 +714,12 @@ data_desc data_for_expression_3d(const expr &expr, samples_setting isosamples,
   count.reserve(isosamples.x + isosamples.y);
   std::fill_n(std::back_inserter(count), isosamples.y, samples.x);
   std::fill_n(std::back_inserter(count), isosamples.x, samples.y);
-  return data_desc(std::move(vbo), 3, std::move(count));
+  return std::make_tuple(std::move(vbo), seq_data_desc(3, std::move(count)));
 }
 
-data_desc data_for_parametric_3d(const expr (&exprs)[3], samples_setting isosamples,
-                                 samples_setting samples, range_setting u_range,
-                                 range_setting v_range)
+std::tuple<vbo_handle, seq_data_desc>
+data_for_parametric_3d(const expr (&exprs)[3], samples_setting isosamples, samples_setting samples,
+                       range_setting u_range, range_setting v_range)
 {
   auto min_u = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
                           u_range.lower_bound.value_or(-10.0f));
@@ -778,7 +769,7 @@ data_desc data_for_parametric_3d(const expr (&exprs)[3], samples_setting isosamp
   count.reserve(isosamples.x + isosamples.y);
   std::fill_n(std::back_inserter(count), isosamples.y, samples.x);
   std::fill_n(std::back_inserter(count), isosamples.x, samples.y);
-  return data_desc(std::move(vbo), 3, std::move(count));
+  return std::make_tuple(std::move(vbo), seq_data_desc(3, std::move(count)));
 }
 
 } // namespace
@@ -786,74 +777,117 @@ data_desc data_for_parametric_3d(const expr (&exprs)[3], samples_setting isosamp
 namespace explot
 {
 
-data_desc data_for_span(std::span<const float> data, size_t stride)
+draw_info grid_lines_draw_info(const grid_data_desc &d)
 {
-  assert(data.size() % stride == 0);
+  auto num_points = d.num_columns * d.num_rows;
+  auto indices = grid_indices_for_lines(num_points, d.num_columns);
+  auto ebo = make_vbo();
+  glBindVertexArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, ebo);
+  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
+  auto count = std::vector<GLsizei>();
+  count.reserve(d.num_columns + d.num_rows);
+  std::fill_n(std::back_inserter(count), d.num_columns, d.num_rows);
+  std::fill_n(std::back_inserter(count), d.num_rows, d.num_columns);
+  return draw_info(std::move(ebo), static_cast<uint32_t>(indices.size()), std::move(count));
+}
+
+draw_info sequential_draw_info(const seq_data_desc &d)
+{
+  auto indices = std::vector<GLint>();
+  indices.reserve(d.num_points);
+  for (auto i = 0u; i < d.num_points; ++i)
+  {
+    indices.push_back(static_cast<GLint>(i));
+  }
+  auto ebo = make_vbo();
+  glBindVertexArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, ebo);
+  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
+  return draw_info(std::move(ebo), static_cast<uint32_t>(indices.size()), d.count);
+}
+
+draw_info sequential_draw_info(const grid_data_desc &d)
+{
+  auto num_points = d.num_columns * d.num_rows;
+  auto indices = std::vector<GLint>();
+  indices.reserve(num_points);
+  for (auto i = 0u; i < num_points; ++i)
+  {
+    indices.push_back(static_cast<GLint>(i));
+  }
+  auto ebo = make_vbo();
+  glBindVertexArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, ebo);
+  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
+  auto count = std::vector<GLsizei>{static_cast<GLsizei>(num_points)};
+  return draw_info(std::move(ebo), static_cast<uint32_t>(indices.size()), std::move(count));
+}
+
+draw_info::draw_info(vbo_handle indices, uint32_t num_indices, std::vector<GLsizei> c)
+    : ebo(std::move(indices)), num_indices(num_indices), count(std::move(c))
+{
+  auto start = intptr_t(0);
+  starts.reserve(count.size());
+  for (auto c : count)
+  {
+    starts.push_back(start);
+    start += c * static_cast<intptr_t>(sizeof(GLuint));
+  }
+}
+
+std::tuple<vbo_handle, seq_data_desc> data_for_span(std::span<const float> data,
+                                                    uint32_t point_size)
+{
+  assert(data.size() % point_size == 0);
   auto vbo = make_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, sizeof(float) * data.size(), data.data(), GL_DYNAMIC_DRAW);
-  return {std::move(vbo), 1, static_cast<std::uint32_t>(data.size() / stride)};
+  return std::make_tuple(
+      std::move(vbo), seq_data_desc(point_size, static_cast<uint32_t>(data.size() / point_size)));
 }
 
-data_desc data_for_span(std::span<const glm::vec3> data)
+seq_data_desc data_for_span(gl_id vbo, std::span<const float> data, uint32_t point_size)
+{
+  assert(data.size() % point_size == 0);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(float) * data.size(), data.data(), GL_DYNAMIC_DRAW);
+  return seq_data_desc(point_size, static_cast<uint32_t>(data.size() / point_size));
+}
+
+std::tuple<vbo_handle, seq_data_desc> data_for_span(std::span<const glm::vec3> data)
 {
   auto vbo = make_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * data.size(), data.data(), GL_DYNAMIC_DRAW);
-  return {std::move(vbo), 3, static_cast<std::uint32_t>(data.size())};
+  return std::make_tuple(std::move(vbo), seq_data_desc(3, static_cast<uint32_t>(data.size())));
 }
 
-data_desc::data_desc(vbo_handle vbo, std::uint32_t point_size, std::uint32_t num_points,
-                     std::uint32_t num_segments)
-    : data_desc(std::move(vbo), point_size,
-                std::vector<GLsizei>(num_segments, static_cast<GLsizei>(num_points / num_segments)))
+seq_data_desc data_for_span(gl_id vbo, std::span<const glm::vec3> data)
+{
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * data.size(), data.data(), GL_DYNAMIC_DRAW);
+  return seq_data_desc(3, static_cast<uint32_t>(data.size()));
+}
+
+seq_data_desc::seq_data_desc(uint32_t point_size, uint32_t num_points, uint32_t num_segments)
+    : seq_data_desc(point_size, std::vector<GLsizei>(
+                                    num_segments, static_cast<GLsizei>(num_points / num_segments)))
 {
   assert(num_points % num_segments == 0);
 }
 
-data_desc::data_desc(vbo_handle vbo, std::uint32_t point_size, std::vector<GLsizei> count)
-    : vbo(std::move(vbo)), ebo(make_vbo()),
-      num_points(static_cast<uint32_t>(std::ranges::fold_left(count, 0, std::plus<GLsizei>()))),
-      num_indices(num_points), point_size(point_size), count(std::move(count))
+seq_data_desc::seq_data_desc(uint32_t point_size, std::vector<GLsizei> count)
+    : num_points(static_cast<uint32_t>(std::ranges::fold_left(count, 0, std::plus<GLsizei>()))),
+      point_size(point_size), count(std::move(count))
 {
-  starts.reserve(this->count.size());
-  auto start = uintptr_t(0);
-  for (const auto &c : this->count)
-  {
-    starts.push_back(start * sizeof(GLuint));
-    start += static_cast<uintptr_t>(c);
-  }
-  glBindVertexArray(0);
-  auto indices = std::make_unique_for_overwrite<GLuint[]>(num_points);
-  for (auto i = 0u; i < num_points; ++i)
-  {
-    indices[i] = i;
-  }
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, num_points * sizeof(GLuint), indices.get(), GL_STATIC_DRAW);
 }
 
-data_desc::data_desc(vbo_handle vbo, uint32_t point_size, std::vector<GLsizei> count,
-                     vbo_handle ebo, uint32_t num_points)
-    : vbo(std::move(vbo)), ebo(std::move(ebo)), num_points(num_points),
-      num_indices(static_cast<uint32_t>(std::ranges::fold_left(count, 0, std::plus<GLsizei>()))),
-      count(std::move(count))
-{
-  starts.reserve(this->count.size());
-  auto start = uintptr_t(0);
-  for (const auto &c : this->count)
-  {
-    starts.push_back(start * sizeof(GLuint));
-    start += static_cast<uintptr_t>(c);
-  }
-}
-
-void print_data(const data_desc &data) {}
-
-std::pair<std::vector<data_desc>, time_point> data_for_plot(const plot_command_2d &plot)
+std::tuple<std::vector<std::tuple<vbo_handle, seq_data_desc>>, time_point>
+data_for_plot(const plot_command_2d &plot)
 {
   auto [row_data, timebase] = row_data_for_graphs(plot.graphs);
-  auto result = std::vector<data_desc>();
+  auto result = std::vector<std::tuple<vbo_handle, seq_data_desc>>();
   result.reserve(plot.graphs.size());
   std::ranges::copy(
       std::ranges::views::transform(
@@ -872,7 +906,7 @@ std::pair<std::vector<data_desc>, time_point> data_for_plot(const plot_command_2
                       auto &rd = *std::ranges::find_if(row_data, [&](const struct row_data &r)
                                                        { return r.filename == c.path; });
                       auto vbo = data_for_using_expressions(c.expressions, rd);
-                      return data_desc(std::move(vbo), 2, rd.data.num_points);
+                      return std::make_tuple(std::move(vbo), seq_data_desc(2, rd.num_points));
                     },
                     [&](const parametric_data_2d &c)
                     {
@@ -882,13 +916,13 @@ std::pair<std::vector<data_desc>, time_point> data_for_plot(const plot_command_2
                 g.data);
           }),
       std::back_inserter(result));
-  return std::make_pair(std::move(result), timebase);
+  return std::make_tuple(std::move(result), timebase);
 }
 
-std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
+std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_3d &plot)
 {
   auto [row_data, time_base] = row_data_for_graphs(plot.graphs);
-  auto result = std::vector<data_desc>();
+  auto result = std::vector<std::tuple<vbo_handle, data_desc>>();
   result.reserve(plot.graphs.size());
   std::ranges::copy(
       std::ranges::views::transform(
@@ -897,13 +931,13 @@ std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
           {
             return std::visit(
                 overload(
-                    [&](const expr &expr)
+                    [&](const expr &expr) -> std::tuple<vbo_handle, data_desc>
                     {
                       return data_for_expression_3d(expr, settings::isosamples(),
                                                     settings::samples(), plot.x_range,
                                                     plot.y_range);
                     },
-                    [&](const csv_data &c)
+                    [&](const csv_data &c) -> std::tuple<vbo_handle, data_desc>
                     {
                       auto &rd = *std::ranges::find_if(
                           row_data, [&](const struct row_data &r)
@@ -911,14 +945,16 @@ std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
                       auto vbo = data_for_using_expressions(c.expressions, rd);
                       if (rd.columns.has_value() && g.mark == mark_type_3d::lines)
                       {
-                        return grid_data_for_lines(std::move(vbo), rd.data.num_points, *rd.columns);
+                        return std::make_tuple(
+                            std::move(vbo),
+                            grid_data_desc(rd.num_points / *rd.columns, *rd.columns));
                       }
                       else
                       {
-                        return data_desc(std::move(vbo), 3, rd.data.count);
+                        return std::make_tuple(std::move(vbo), seq_data_desc(3, rd.num_points));
                       }
                     },
-                    [&](const parametric_data_3d &c)
+                    [&](const parametric_data_3d &c) -> std::tuple<vbo_handle, data_desc>
                     {
                       return data_for_parametric_3d(c.expressions, settings::isosamples(),
                                                     settings::samples(), plot.u_range,
@@ -930,22 +966,22 @@ std::vector<data_desc> data_for_plot(const plot_command_3d &plot)
   return result;
 }
 
-data_desc reshape(data_desc d, std::uint32_t new_point_size)
+seq_data_desc reshape(seq_data_desc d, uint32_t new_point_size)
 {
   if (new_point_size >= d.point_size)
   {
     assert(new_point_size % d.point_size == 0);
     const auto factor = new_point_size / d.point_size;
     assert(d.num_points % factor == 0);
-    return data_desc(std::move(d.vbo), new_point_size, d.num_points / factor,
-                     static_cast<uint32_t>(d.count.size()));
+    return seq_data_desc(new_point_size, d.num_points / factor,
+                         static_cast<uint32_t>(d.count.size()));
   }
   else
   {
     assert(d.point_size % new_point_size == 0);
     const auto factor = d.point_size / new_point_size;
-    return data_desc(std::move(d.vbo), new_point_size, d.num_points * factor,
-                     static_cast<uint32_t>(d.count.size()));
+    return seq_data_desc(new_point_size, d.num_points * factor,
+                         static_cast<uint32_t>(d.count.size()));
   }
 }
 

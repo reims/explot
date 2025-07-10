@@ -10,7 +10,7 @@
 namespace
 {
 using namespace explot;
-data_desc data_for_coordinate_system(std::uint32_t num_ticks)
+seq_data_desc data_for_coordinate_system(gl_id vbo, std::uint32_t num_ticks)
 {
   using v3 = glm::vec3;
   assert(num_ticks > 1);
@@ -18,7 +18,7 @@ data_desc data_for_coordinate_system(std::uint32_t num_ticks)
                           v3(-1.0f, 1.0f, -1.0f),  v3(-1.0f, -1.0f, -1.0f), v3(-1.0f, -1.0f, 1.0f)};
   data.reserve(6 + 6 * num_ticks);
   const auto step = 2.0f / (static_cast<float>(num_ticks) - 1.0f);
-  const auto radius = 0.05f;
+  const auto radius = 0.02f;
   for (auto i = 0u; i < num_ticks; ++i)
   {
     data.emplace_back(-1.0f + static_cast<float>(i) * step, -1.0f - radius, -1.0f);
@@ -30,7 +30,7 @@ data_desc data_for_coordinate_system(std::uint32_t num_ticks)
     data.emplace_back(-1.0f - radius, -1.0f, -1.0f + static_cast<float>(i) * step);
     data.emplace_back(-1.0f + radius, -1.0f, -1.0f + static_cast<float>(i) * step);
   }
-  return data_for_span(data);
+  return data_for_span(vbo, data);
 }
 
 } // namespace
@@ -38,8 +38,9 @@ data_desc data_for_coordinate_system(std::uint32_t num_ticks)
 namespace explot
 {
 coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t num_ticks)
-    : scale_to_phase(transform(clip_rect, tics.bounding_rect)),
-      lines(data_for_coordinate_system(num_ticks), 1.0f, axis_color, {.phase_to_clip = 6}),
+    : scale_to_phase(transform(clip_rect, tics.bounding_rect)), vbo(make_vbo()),
+      lines(vbo, data_for_coordinate_system(vbo, num_ticks), 1.0f, axis_color,
+            {.phase_to_clip = 6}),
       font(make_font_atlas("+-.,0123456789eE", 10).value()), ubo(make_vbo())
 {
   const auto &br = tics.bounding_rect;
@@ -66,7 +67,7 @@ void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
 {
   const auto num_ticks = cs.xlabels.size();
   const auto step = 2.0f / static_cast<float>(num_ticks - 1);
-  const auto radius = 0.06f;
+  const auto radius = 0.04f;
   for (auto i = 0u; i < num_ticks; ++i)
   {
     auto offset = phase_to_clip * cs.scale_to_phase
@@ -89,7 +90,7 @@ void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f - radius, -1.0f, -1.0f + static_cast<float>(i) * step, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    update(cs.zlabels[i], {offset.x, offset.y}, {0.5f, 1.0f});
+    update(cs.zlabels[i], {offset.x, offset.y}, {1.0f, 0.5f});
   }
 
   auto axis_phase_to_clip = phase_to_clip * cs.scale_to_phase;

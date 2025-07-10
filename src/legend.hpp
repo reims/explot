@@ -12,7 +12,7 @@
 
 namespace explot
 {
-struct legend final
+struct legend
 {
   using mark_state = std::variant<points_2d_state, lines_state_2d>;
 
@@ -20,6 +20,7 @@ struct legend final
   std::vector<gl_string> titles;
   std::vector<mark_state> marks;
   std::vector<glm::vec4> colors;
+  std::vector<vbo_handle> vbos;
   vbo_handle ubo;
 
   legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts);

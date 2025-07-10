@@ -41,16 +41,16 @@ std::string glyphs_for_graphs(std::span<const graph_desc_3d> graphs)
   return str;
 }
 
-data_desc make_point_data()
+seq_data_desc make_point_data(gl_id vbo)
 {
   static constexpr float coord[] = {0.0f, 0.0f};
-  return data_for_span(coord, 2);
+  return data_for_span(vbo, coord, 2);
 }
 
-data_desc make_line_data()
+seq_data_desc make_line_data(gl_id vbo)
 {
   static constexpr float coords[] = {-0.8f, 0.0f, 0.8f, 0.0f};
-  return data_for_span(coords, 2);
+  return data_for_span(vbo, coords, 2);
 }
 
 static constexpr auto ubo_bindings_start = 16u;
@@ -68,18 +68,20 @@ legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type>
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
   marks.reserve(graphs.size());
+  vbos.reserve(graphs.size());
   auto i = 0u;
   for (const auto &g : graphs)
   {
+    auto &vbo = vbos.emplace_back(make_vbo());
     switch (g.mark)
     {
     case mark_type_2d::points:
-      marks.emplace_back(points_2d_state(make_point_data(), lts[i].width, lts[i].color, 9.0f,
-                                         {.phase_to_screen = ubo_bindings_start + i}));
+      marks.emplace_back(points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color,
+                                         9.0f, {.phase_to_screen = ubo_bindings_start + i}));
       break;
     case mark_type_2d::impulses:
     case mark_type_2d::lines:
-      marks.emplace_back(lines_state_2d(make_line_data(), lts[i].width, lts[i].color,
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
                                         {.phase_to_screen = ubo_bindings_start + i}));
       break;
     }
@@ -99,16 +101,18 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
   marks.reserve(graphs.size());
+  vbos.reserve(graphs.size());
   for (const auto &g : graphs)
   {
+    auto &vbo = vbos.emplace_back(make_vbo());
     switch (g.mark)
     {
     case mark_type_3d::points:
-      marks.emplace_back(points_2d_state(make_point_data(), lts[i].width, lts[i].color, 9.0f,
-                                         {.phase_to_screen = ubo_bindings_start + i}));
+      marks.emplace_back(points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color,
+                                         9.0f, {.phase_to_screen = ubo_bindings_start + i}));
       break;
     case mark_type_3d::lines:
-      marks.emplace_back(lines_state_2d(make_line_data(), lts[i].width, lts[i].color,
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
                                         {.phase_to_screen = ubo_bindings_start + i}));
       break;
     }

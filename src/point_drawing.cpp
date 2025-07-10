@@ -1,5 +1,6 @@
 #include "point_drawing.hpp"
 #include <glm/gtc/type_ptr.hpp>
+#include "data.hpp"
 #include "gl-handle.hpp"
 #include "program.hpp"
 
@@ -159,12 +160,13 @@ program_handle make_points_3d_program(const uniform_bindings_3d &bds)
 
 namespace explot
 {
-points_2d_state::points_2d_state(data_desc d, float width, const glm::vec4 &color,
-                                 float point_wdith, const uniform_bindings_2d &bds)
-    : vao(make_vao()), program(make_points_2d_program(bds)), data(std::move(d))
+points_2d_state::points_2d_state(gl_id vbo, const seq_data_desc &d, float width,
+                                 const glm::vec4 &color, float point_wdith,
+                                 const uniform_bindings_2d &bds)
+    : vao(make_vao()), program(make_points_2d_program(bds)), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   uniform ufs[] = {{"width", width}, {"color", color}, {"point_width", point_wdith}};
   set_uniforms(program, ufs);
@@ -175,15 +177,29 @@ void draw(const points_2d_state &state)
 {
   glBindVertexArray(state.vao);
   glUseProgram(state.program);
-  glDrawArrays(GL_POINTS, 0, static_cast<int32_t>(state.data.num_points));
+  glDrawArrays(GL_POINTS, 0, static_cast<int32_t>(state.data.num_indices));
 }
 
-points_3d_state::points_3d_state(data_desc d, float width, const glm::vec4 &color,
-                                 float point_width, const uniform_bindings_3d &bds)
-    : vao(make_vao()), program(make_points_3d_program(bds)), data(std::move(d))
+points_3d_state::points_3d_state(gl_id vbo, const seq_data_desc &d, float width,
+                                 const glm::vec4 &color, float point_width,
+                                 const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(make_points_3d_program(bds)), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  glEnableVertexAttribArray(0);
+  uniform ufs[] = {{"width", width / 2}, {"point_width", point_width / 2}, {"color", color}};
+  set_uniforms(program, ufs);
+}
+
+points_3d_state::points_3d_state(gl_id vbo, const grid_data_desc &d, float width,
+                                 const glm::vec4 &color, float point_width,
+                                 const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(make_points_3d_program(bds)), data(sequential_draw_info(d))
+{
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   uniform ufs[] = {{"width", width / 2}, {"point_width", point_width / 2}, {"color", color}};
@@ -194,7 +210,7 @@ void draw(const points_3d_state &state)
 {
   glBindVertexArray(state.vao);
   glUseProgram(state.program);
-  glDrawArrays(GL_POINTS, 0, static_cast<int32_t>(state.data.num_points));
+  glDrawArrays(GL_POINTS, 0, static_cast<int32_t>(state.data.num_indices));
 }
 
 } // namespace explot

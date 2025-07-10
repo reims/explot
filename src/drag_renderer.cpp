@@ -19,14 +19,16 @@ auto data_for_drag_renderer()
 namespace explot
 {
 
-drag_render_state::drag_render_state()
-    : lines(data_for_drag_renderer(), 1.0f, selection_color, {.phase_to_screen = 5}),
-      ubo(make_vbo())
+drag_render_state::drag_render_state(std::tuple<vbo_handle, seq_data_desc> &&t)
+    : lines(std::get<0>(t), std::get<1>(t), 1.0f, selection_color, {.phase_to_screen = 5}),
+      vbo(std::move(std::get<0>(t))), ubo(make_vbo())
 {
   glBindBuffer(GL_UNIFORM_BUFFER, ubo);
   glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
   glBindBufferBase(GL_UNIFORM_BUFFER, 5, ubo);
 }
+
+drag_render_state::drag_render_state() : drag_render_state(data_for_drag_renderer()) {}
 
 void draw(const drag_render_state &s, const rect &d)
 {

@@ -3,7 +3,6 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "data.hpp"
 #include <GL/glew.h>
 #include "gl-handle.hpp"
 #include <cstring>
@@ -69,19 +68,17 @@ void step(gl_id src_vbo, gl_id tgt_vbo, uint32_t num_points)
   glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0, 0, 0);
 }
 
-explot::program_handle program_for_shader(const char *shader_src)
+program_handle program_for_shader(const char *shader_src)
 {
-  return explot::make_program_with_varying(shader_src, "v");
+  return make_program_with_varying(shader_src, "v");
 }
 
-explot::vbo_handle prepare(const explot::data_desc &d, uint32_t stride, uint32_t offset)
+vbo_handle prepare(gl_id dvbo, uint32_t num_points, uint32_t point_size, uint32_t offset)
 {
-  assert(d.point_size % stride == 0);
-  auto num_points = d.num_points * (d.point_size / stride);
   auto program = program_for_shader(prepare_shader);
-  auto vao = explot::make_vao();
+  auto vao = make_vao();
   glBindVertexArray(vao);
-  auto vbo = explot::make_vbo();
+  auto vbo = make_vbo();
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, 2 * static_cast<std::size_t>(num_points) * sizeof(float), nullptr,
                GL_DYNAMIC_DRAW);
@@ -89,8 +86,8 @@ explot::vbo_handle prepare(const explot::data_desc &d, uint32_t stride, uint32_t
   glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo, 0,
                     2 * static_cast<std::size_t>(num_points) * sizeof(float));
   glUseProgram(program);
-  glBindBuffer(GL_ARRAY_BUFFER, d.vbo);
-  glVertexAttribPointer(0, 1, GL_FLOAT, GL_FALSE, stride * sizeof(float),
+  glBindBuffer(GL_ARRAY_BUFFER, dvbo);
+  glVertexAttribPointer(0, 1, GL_FLOAT, GL_FALSE, point_size * sizeof(float),
                         (void *)(offset * sizeof(float)));
   glEnableVertexAttribArray(0);
   glBeginTransformFeedback(GL_POINTS);
@@ -100,17 +97,15 @@ explot::vbo_handle prepare(const explot::data_desc &d, uint32_t stride, uint32_t
   return vbo;
 }
 
-glm::vec2 minmax(const explot::data_desc &d, uint32_t stride, uint32_t offset)
+glm::vec2 minmax(gl_id dvbo, uint32_t num_points, uint32_t point_size, uint32_t offset)
 {
-  if (d.num_points == 0)
+  if (num_points == 0)
   {
     return glm::vec2(-1.0f, 1.0f);
   }
-  assert(d.point_size % stride == 0);
-  auto num_points = d.num_points * (d.point_size / stride);
-  auto vbo1 = prepare(d, stride, offset);
-  auto vbo2 = explot::make_vbo();
-  auto vao = explot::make_vao();
+  auto vbo1 = prepare(dvbo, num_points, point_size, offset);
+  auto vbo2 = make_vbo();
+  auto vao = make_vao();
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo2);
   glBufferData(GL_ARRAY_BUFFER, static_cast<std::size_t>(num_points) * sizeof(float), nullptr,
@@ -135,21 +130,30 @@ glm::vec2 minmax(const explot::data_desc &d, uint32_t stride, uint32_t offset)
 
 namespace explot
 {
-glm::vec2 minmax_x(const data_desc &d, uint32_t stride) { return minmax(d, stride, 0); }
-
-glm::vec2 minmax_y(const data_desc &d, uint32_t stride) { return minmax(d, stride, 1); }
-
-glm::vec2 minmax_z(const data_desc &d, uint32_t stride) { return minmax(d, stride, 2); }
-
-rect bounding_rect_2d(const data_desc &d, uint32_t stride)
+glm::vec2 minmax_x(gl_id vbo, uint32_t num_points, uint32_t point_size)
 {
-  auto bx = minmax_x(d, stride);
+  return minmax(vbo, num_points, point_size, 0);
+}
+
+glm::vec2 minmax_y(gl_id vbo, uint32_t num_points, uint32_t point_size)
+{
+  return minmax(vbo, num_points, point_size, 1);
+}
+
+glm::vec2 minmax_z(gl_id vbo, uint32_t num_points, uint32_t point_size)
+{
+  return minmax(vbo, num_points, point_size, 2);
+}
+
+rect bounding_rect_2d(gl_id vbo, uint32_t num_points)
+{
+  auto bx = minmax_x(vbo, num_points, 2);
   if (bx.y - bx.x < 1e-8)
   {
     bx.x -= 1.0f;
     bx.y += 1.0f;
   }
-  auto by = minmax_y(d, stride);
+  auto by = minmax_y(vbo, num_points, 2);
   if (by.y - by.x < 1e-8)
   {
     by.x -= 1.0f;
@@ -160,21 +164,21 @@ rect bounding_rect_2d(const data_desc &d, uint32_t stride)
               .upper_bounds = glm::vec3(bx.y, by.y, 1.0f)};
 }
 
-rect bounding_rect_3d(const data_desc &d, uint32_t stride)
+rect bounding_rect_3d(gl_id vbo, uint32_t num_points)
 {
-  auto bx = minmax_x(d, stride);
+  auto bx = minmax_x(vbo, num_points, 3);
   if (bx.y - bx.x < 1e-8)
   {
     bx.x -= 1.0f;
     bx.y += 1.0f;
   }
-  auto by = minmax_y(d, stride);
+  auto by = minmax_y(vbo, num_points, 3);
   if (by.y - by.x < 1e-8)
   {
     by.x -= 1.0f;
     by.y += 1.0f;
   }
-  auto bz = minmax_z(d, stride);
+  auto bz = minmax_z(vbo, num_points, 3);
   if (bz.y - bz.x < 1e-8)
   {
     bz.x -= 1.0f;

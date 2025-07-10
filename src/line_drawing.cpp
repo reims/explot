@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <memory>
 #include <numbers>
+#include "data.hpp"
 #include "gl-handle.hpp"
 #include "program.hpp"
 #include "prefix_sum.hpp"
@@ -580,13 +581,13 @@ auto program_for_dashed_line_strip_2d(uint32_t num_uints, const uniform_bindings
 
 namespace explot
 {
-line_strip_state_2d::line_strip_state_2d(data_desc d, float width, const glm::vec4 &color,
-                                         const uniform_bindings_2d &bds)
-    : vao(make_vao()), program(program_for_lines_2d(bds)), data(std::move(d))
+line_strip_state_2d::line_strip_state_2d(gl_id vbo, const seq_data_desc &d, float width,
+                                         const glm::vec4 &color, const uniform_bindings_2d &bds)
+    : vao(make_vao()), program(program_for_lines_2d(bds)), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
 
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
@@ -595,14 +596,14 @@ line_strip_state_2d::line_strip_state_2d(data_desc d, float width, const glm::ve
   set_uniforms(program, ufs);
 }
 
-line_strip_state_3d::line_strip_state_3d(data_desc d, float width, const glm::vec4 &color,
-                                         const uniform_bindings_3d &bds)
-    : vao(make_vao()), program(program_for_lines_3d(bds)), data(std::move(d))
+line_strip_state_3d::line_strip_state_3d(gl_id vbo, const seq_data_desc &d, float width,
+                                         const glm::vec4 &color, const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(program_for_lines_3d(bds)), data(sequential_draw_info(d))
 {
 
   glBindVertexArray(vao);
 
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
@@ -611,12 +612,28 @@ line_strip_state_3d::line_strip_state_3d(data_desc d, float width, const glm::ve
   set_uniforms(program, ufs);
 }
 
-lines_state_2d::lines_state_2d(data_desc d, float width, const glm::vec4 &color,
-                               const uniform_bindings_2d &bds)
-    : vao(make_vao()), program(program_for_lines_2d(bds)), data(std::move(d))
+line_strip_state_3d::line_strip_state_3d(gl_id vbo, const grid_data_desc &d, float width,
+                                         const glm::vec4 &color, const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(program_for_lines_3d(bds)), data(grid_lines_draw_info(d))
+{
+
+  glBindVertexArray(vao);
+
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
+
+  uniform ufs[] = {{"width", width}, {"color", color}};
+  set_uniforms(program, ufs);
+}
+
+lines_state_2d::lines_state_2d(gl_id vbo, const seq_data_desc &d, float width,
+                               const glm::vec4 &color, const uniform_bindings_2d &bds)
+    : vao(make_vao()), program(program_for_lines_2d(bds)), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
@@ -624,12 +641,12 @@ lines_state_2d::lines_state_2d(data_desc d, float width, const glm::vec4 &color,
   set_uniforms(program, ufs);
 }
 
-lines_state_3d::lines_state_3d(data_desc d, float width, const glm::vec4 &color,
-                               const uniform_bindings_3d &bds)
-    : vao(make_vao()), program(program_for_lines_3d(bds)), data(std::move(d))
+lines_state_3d::lines_state_3d(gl_id vbo, const seq_data_desc &d, float width,
+                               const glm::vec4 &color, const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(program_for_lines_3d(bds)), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
@@ -659,26 +676,26 @@ void draw(const lines_state_2d &state)
 {
   glBindVertexArray(state.vao);
   glUseProgram(state.program);
-  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_points));
+  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_indices));
 }
 
 void draw(const lines_state_3d &state)
 {
   glBindVertexArray(state.vao);
   glUseProgram(state.program);
-  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_points));
+  glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(state.data.num_indices));
 }
 
 dashed_line_strip_state_2d::dashed_line_strip_state_2d(
-    data_desc d, const std::vector<std::pair<uint32_t, uint32_t>> &dash_type, float width,
-    const glm::vec4 &color, const uniform_bindings_2d &bds)
-    : vao(make_vao()), data(std::move(d)), curve_length(make_vbo())
+    gl_id vbo, const seq_data_desc &d, const std::vector<std::pair<uint32_t, uint32_t>> &dash_type,
+    float width, const glm::vec4 &color, const uniform_bindings_2d &bds)
+    : vbo(vbo), vao(make_vao()), data(sequential_draw_info(d)), curve_length(make_vbo())
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, curve_length);
   glBufferData(GL_ARRAY_BUFFER, data.num_indices * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 
-  glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void *)0);
   glEnableVertexAttribArray(0);
 
@@ -723,7 +740,7 @@ dashed_line_strip_state_2d::dashed_line_strip_state_2d(
 
 void update(const dashed_line_strip_state_2d &state)
 {
-  update_curve_length(state.data.vbo, state.curve_length, state.data.num_points);
+  update_curve_length(state.vbo, state.curve_length, state.data.num_indices);
 }
 
 void draw(const dashed_line_strip_state_2d &state)
