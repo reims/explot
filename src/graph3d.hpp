@@ -6,14 +6,16 @@
 #include "commands.hpp"
 #include <variant>
 #include "line_type.hpp"
+#include "surfaces.hpp"
 
 namespace explot
 {
 struct graph3d final
 {
-  using state = std::variant<line_strip_state_3d, points_3d_state>;
+  using state = std::variant<line_strip_state_3d, points_3d_state, surface_lines>;
   explicit graph3d(vbo_handle vbo, const data_desc &data, mark_type_3d mark, line_type lt);
   vbo_handle vbo;
+  uint32_t num_points;
   state graph;
   line_type lt;
 };

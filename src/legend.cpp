@@ -115,6 +115,10 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
       marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
                                         {.phase_to_screen = ubo_bindings_start + i}));
       break;
+    case mark_type_3d::surface:
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
+                                        {.phase_to_screen = ubo_bindings_start + i}));
+      break;
     }
     glBindBufferRange(GL_UNIFORM_BUFFER, ubo_bindings_start + i, ubo, i * sizeof(glm::mat4),
                       sizeof(glm::mat4));
@@ -141,7 +145,7 @@ void update(const legend &l, const rect &screen)
         .upper_bounds = {start_of_mark + 20.0f, screen.upper_bounds.y - i * text_height - 10,
                          1.0f}};
     mats[i] = transform(clip_rect, screen_rect);
-    update(s, {start_of_mark + 20, screen_rect.upper_bounds.y}, {0.0f, 1.0f});
+    update(s, {start_of_mark + 20, screen_rect.upper_bounds.y, 0}, {0.0f, 1.0f});
   }
 
   glBindBuffer(GL_UNIFORM_BUFFER, l.ubo);

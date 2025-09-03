@@ -125,7 +125,8 @@ enum struct mark_type_2d
 enum struct mark_type_3d
 {
   points,
-  lines
+  lines,
+  surface
 };
 
 using data_source_2d = std::variant<expr, csv_data, parametric_data_2d>;
@@ -189,13 +190,14 @@ enum class settings_id
   xrange,
   parametric,
   timefmt,
-  xdata
+  xdata,
+  hidden3d
 };
 
 using all_settings =
     enum_sequence<settings_id, settings_id::samples, settings_id::isosamples,
                   settings_id::datafile_separator, settings_id::xrange, settings_id::parametric,
-                  settings_id::timefmt, settings_id::xdata>;
+                  settings_id::timefmt, settings_id::xdata, settings_id::hidden3d>;
 
 template <settings_id>
 struct settings_type
@@ -245,6 +247,12 @@ struct settings_type<settings_id::xdata>
   using type = data_type;
 };
 
+template <>
+struct settings_type<settings_id::hidden3d>
+{
+  using type = bool;
+};
+
 template <settings_id id>
 using settings_type_t = typename settings_type<id>::type;
 
@@ -275,8 +283,6 @@ struct unset_command final
   };
 
   enum_sum_t<settings_id, unset_setting, all_settings> setting;
-
-  // explicit show_command(show_setting s) : setting(s) {}
 };
 
 struct set_command

@@ -26,6 +26,8 @@ struct line_strip_state_3d final
                       const uniform_bindings_3d &bds = {});
   line_strip_state_3d(gl_id vbo, const grid_data_desc &d, float width, const glm::vec4 &color,
                       const uniform_bindings_3d &bds = {});
+  line_strip_state_3d(gl_id vbo, const grid_data_desc &d, gl_id offsets, float factor, float width,
+                      const glm::vec4 &color, const uniform_bindings_3d &bds = {});
 
   vao_handle vao;
   program_handle program;

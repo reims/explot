@@ -6,9 +6,11 @@
 #include <algorithm>
 #include <ranges>
 #include <tuple>
+#include "commands.hpp"
 #include "parse_ast.hpp"
 #include "overload.hpp"
 #include "user_definitions.hpp"
+#include "settings.hpp"
 
 namespace
 {
@@ -409,7 +411,14 @@ mark_type_3d transform_mark(ast::mark_type_3d mark)
   switch (mark)
   {
   case ast::mark_type_3d::lines:
-    return mark_type_3d::lines;
+    if (settings::hidden3d())
+    {
+      return mark_type_3d::surface;
+    }
+    else
+    {
+      return mark_type_3d::lines;
+    }
   case ast::mark_type_3d::points:
     return mark_type_3d::points;
   }

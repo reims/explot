@@ -2,8 +2,7 @@
 #include <memory>
 #include "gl-handle.hpp"
 #include <string>
-#include <glm/vec2.hpp>
-#include <glm/mat4x4.hpp>
+#include <glm/glm.hpp>
 #include <optional>
 #include <ft2build.h>
 #include <vector>
@@ -68,7 +67,7 @@ struct gl_string final
   glm::vec2 lower_bounds;
   glm::vec2 upper_bounds;
 };
-void update(const gl_string &str, const glm::vec2 &offset, const glm::vec2 &anchor = {0.0f, 0.0f});
+void update(const gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor = {0.0f, 0.0f});
 void draw(const gl_string &str);
 void draw(const font_atlas &atlas, const glm::mat4 &screen_to_clip, const glm::vec2 &offset);
 } // namespace explot

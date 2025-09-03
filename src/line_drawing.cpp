@@ -67,6 +67,29 @@ void main()
 }
 )shader";
 
+constexpr auto offset_vertex_shader_src_3d = R"shader(#version 330 core
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 offset;
+
+uniform float factor;
+
+uniform PhaseToClip
+{
+  mat4 phase_to_clip;
+};
+uniform ClipToScreen
+{
+  mat4 clip_to_screen;
+};
+
+void main()
+{
+  vec4 clip_pos = phase_to_clip * vec4(position + factor * offset, 1);
+  clip_pos = clip_pos / clip_pos.w;
+  gl_Position = clip_to_screen * clip_pos;
+}
+)shader";
+
 constexpr auto fragment_shader_src = R"foo(
 #version 330 core
 out vec4 FragColor;
@@ -109,23 +132,25 @@ void main()
 {
   vec2 p0 = gl_in[0].gl_Position.xy;
   vec2 p1 = gl_in[1].gl_Position.xy;
+  float z0 = gl_in[0].gl_Position.z;
+  float z1 = gl_in[1].gl_Position.z;
   vec2 p01 = normalize(p1 - p0);
 
   float arg = -atan(p01.y, p01.x) - PI / 2;
   mat2 m = (width + 0.5) * mat2(cos(arg), -sin(arg), sin(arg), cos(arg));
   
   vec4 rot_shape[8];
-  rot_shape[0] = screen_to_clip * vec4(m * shape[0] + p0, 0, 1);
-  rot_shape[1] = screen_to_clip * vec4(m * shape[1] + p0, 0, 1);
-  rot_shape[2] = screen_to_clip * vec4(m * shape[2] + p0, 0, 1);
-  rot_shape[3] = screen_to_clip * vec4(m * shape[3] + p0, 0, 1);
-  rot_shape[4] = screen_to_clip * vec4(m * shape[4] + p1, 0, 1);
-  rot_shape[5] = screen_to_clip * vec4(m * shape[5] + p1, 0, 1);
-  rot_shape[6] = screen_to_clip * vec4(m * shape[6] + p1, 0, 1);
-  rot_shape[7] = screen_to_clip * vec4(m * shape[7] + p1, 0, 1);
+  rot_shape[0] = screen_to_clip * vec4(m * shape[0] + p0, z0, 1);
+  rot_shape[1] = screen_to_clip * vec4(m * shape[1] + p0, z0, 1);
+  rot_shape[2] = screen_to_clip * vec4(m * shape[2] + p0, z0, 1);
+  rot_shape[3] = screen_to_clip * vec4(m * shape[3] + p0, z0, 1);
+  rot_shape[4] = screen_to_clip * vec4(m * shape[4] + p1, z1, 1);
+  rot_shape[5] = screen_to_clip * vec4(m * shape[5] + p1, z1, 1);
+  rot_shape[6] = screen_to_clip * vec4(m * shape[6] + p1, z1, 1);
+  rot_shape[7] = screen_to_clip * vec4(m * shape[7] + p1, z1, 1);
   
-  vec4 cp0 = screen_to_clip * vec4(p0, 0, 1);
-  vec4 cp1 = screen_to_clip * vec4(p1, 0, 1);
+  vec4 cp0 = screen_to_clip * vec4(p0, z0, 1);
+  vec4 cp1 = screen_to_clip * vec4(p1, z1, 1);
 
   dist = 0.0;
   gl_Position = cp0;
@@ -505,6 +530,23 @@ auto program_for_lines_3d(const uniform_bindings_3d &bds = {})
   return program;
 }
 
+auto program_for_offset_lines_3d(const uniform_bindings_3d &bds = {})
+{
+  auto program =
+      make_program(lines_geometry_shader_src, offset_vertex_shader_src_3d, fragment_shader_src);
+  auto s = shape_for_lines(3);
+  glUseProgram(program);
+  glUniform2fv(glGetUniformLocation(program, "shape"), 8, s.get());
+  auto phase_to_clip_idx = glGetUniformBlockIndex(program, "PhaseToClip");
+  glUniformBlockBinding(program, phase_to_clip_idx, bds.phase_to_clip);
+  auto screen_to_clip_idx = glGetUniformBlockIndex(program, "ScreenToClip");
+  glUniformBlockBinding(program, screen_to_clip_idx, bds.screen_to_clip);
+  auto clip_to_screen_idx = glGetUniformBlockIndex(program, "ClipToScreen");
+  glUniformBlockBinding(program, clip_to_screen_idx, bds.clip_to_screen);
+
+  return program;
+}
+
 void update_curve_length(gl_id points, gl_id length, uint32_t count)
 {
   static constexpr auto shader = R"(#version 430 core
@@ -604,11 +646,31 @@ line_strip_state_3d::line_strip_state_3d(gl_id vbo, const seq_data_desc &d, floa
   glBindVertexArray(vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void *)0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
 
   uniform ufs[] = {{"width", width}, {"color", color}};
+  set_uniforms(program, ufs);
+}
+
+line_strip_state_3d::line_strip_state_3d(gl_id vbo, const grid_data_desc &d, gl_id offsets,
+                                         float factor, float width, const glm::vec4 &color,
+                                         const uniform_bindings_3d &bds)
+    : vao(make_vao()), program(program_for_offset_lines_3d(bds)), data(grid_lines_draw_info(d))
+{
+  glBindVertexArray(vao);
+
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+  glEnableVertexAttribArray(0);
+
+  glBindBuffer(GL_ARRAY_BUFFER, offsets);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+  glEnableVertexAttribArray(1);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
+  uniform ufs[] = {{"width", width}, {"color", color}, {"factor", factor}};
   set_uniforms(program, ufs);
 }
 

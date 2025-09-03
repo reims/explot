@@ -27,11 +27,7 @@ auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lt
   return result;
 }
 
-auto bounding_rect(const graph3d &g)
-{
-  return bounding_rect_3d(g.vbo,
-                          std::visit([](const auto &s) { return s.data.num_indices; }, g.graph));
-}
+auto bounding_rect(const graph3d &g) { return bounding_rect_3d(g.vbo, g.num_points); }
 
 auto bounding_rect_for_graphs(std::span<const graph3d> graphs)
 {
@@ -74,8 +70,8 @@ void update(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &v
   const auto height = static_cast<float>(screen.upper_bounds.y - screen.lower_bounds.y);
   const auto phase_to_std_view = transform(plot.phase_space.bounding_rect, clip_rect);
   const auto view_to_clip =
-      glm::perspectiveFov(std::numbers::pi_v<float> / 4.0f, width, height, 0.0001f, 2.0f);
-  const auto pre_translation = glm::translate(glm::identity<glm::mat4>(), -view_origin);
+      glm::perspectiveFov(std::numbers::pi_v<float> / 4.0f, width, height, 0.5f, 10.0f);
+  const auto pre_translation = glm::translate(glm::identity<glm::mat4>(), view_origin);
   const auto phase_to_view = view_rotation * pre_translation * phase_to_std_view;
 
   glm::mat4 ufs[] = {view_to_clip * phase_to_view, transform(screen, clip_rect),

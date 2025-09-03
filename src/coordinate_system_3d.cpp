@@ -74,7 +74,7 @@ void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f + static_cast<float>(i) * step, -1.0f - radius, -1.0f, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    update(cs.xlabels[i], {offset.x, offset.y}, {0.5f, 1.0f});
+    update(cs.xlabels[i], offset, {0.5f, 1.0f});
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
@@ -82,7 +82,7 @@ void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f, -1.0f + static_cast<float>(i) * step, -1.0f - radius, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    update(cs.ylabels[i], {offset.x, offset.y}, {0.5f, 1.0f});
+    update(cs.ylabels[i], offset, {0.5f, 1.0f});
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
@@ -90,7 +90,7 @@ void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
                   * glm::vec4(-1.0f - radius, -1.0f, -1.0f + static_cast<float>(i) * step, 1.0f);
     offset /= offset.w;
     offset = clip_to_screen * offset;
-    update(cs.zlabels[i], {offset.x, offset.y}, {1.0f, 0.5f});
+    update(cs.zlabels[i], offset, {1.0f, 0.5f});
   }
 
   auto axis_phase_to_clip = phase_to_clip * cs.scale_to_phase;

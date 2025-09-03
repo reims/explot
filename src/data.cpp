@@ -1,7 +1,9 @@
 #include "data.hpp"
 #include "commands.hpp"
 #include "gl-handle.hpp"
+#include <bits/ranges_algo.h>
 #include <cstdint>
+#include <fmt/core.h>
 #include <fmt/ranges.h>
 #include "csv.hpp"
 #include <array>
@@ -9,6 +11,7 @@
 #include "overload.hpp"
 #include "range_setting.hpp"
 #include <algorithm>
+#include <iterator>
 #include <ranges>
 #include <string_view>
 #include "program.hpp"
@@ -66,7 +69,7 @@ std::string to_glsl(const expr &e, std::span<const int> indices = {})
 
     std::string operator()(const box<binary_op> &op) const
     {
-      auto o = [&]()
+      auto o = [&]
       {
         switch (op->op)
         {
@@ -717,6 +720,42 @@ data_for_expression_3d(const expr &expr, samples_setting isosamples, samples_set
   return std::make_tuple(std::move(vbo), seq_data_desc(3, std::move(count)));
 }
 
+std::tuple<vbo_handle, grid_data_desc> grid_data_for_expression_3d(const expr &expr,
+                                                                   samples_setting samples,
+                                                                   range_setting xrange,
+                                                                   range_setting yrange)
+{
+  auto min_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
+                          xrange.lower_bound.value_or(-10.0f));
+  auto max_x = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
+                          xrange.upper_bound.value_or(10.0f));
+  auto min_y = std::visit(overload([](float v) { return v; }, [](auto_scale) { return -10.0f; }),
+                          yrange.lower_bound.value_or(-10.0f));
+  auto max_y = std::visit(overload([](float v) { return v; }, [](auto_scale) { return 10.0f; }),
+                          yrange.upper_bound.value_or(10.0f));
+  assert(min_x < max_x && min_y < max_y);
+  auto program = program_for_functional_data_3d_x(expr);
+  glUseProgram(program);
+  const auto step_x = (max_x - min_x) / static_cast<float>(samples.x - 1);
+  const auto step_y = (max_x - min_x) / static_cast<float>(samples.y - 1);
+  const auto num_points = samples.x * samples.y;
+  auto vao = make_vao();
+  auto vbo = make_vbo();
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBufferData(GL_ARRAY_BUFFER, num_points * sizeof(glm::vec3), nullptr, GL_STATIC_DRAW);
+  glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 0, vbo, 0, num_points * sizeof(glm::vec3));
+  glBeginTransformFeedback(GL_POINTS);
+  glUniform1i(glGetUniformLocation(program, "num_points_per_line"), samples.x);
+  glUniform1f(glGetUniformLocation(program, "min_x"), min_x);
+  glUniform1f(glGetUniformLocation(program, "step_x"), step_x);
+  glUniform1f(glGetUniformLocation(program, "min_y"), min_y);
+  glUniform1f(glGetUniformLocation(program, "step_y"), step_y);
+  glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(num_points));
+  glEndTransformFeedback();
+  return std::make_tuple(std::move(vbo), grid_data_desc(samples.y, samples.x));
+}
+
 std::tuple<vbo_handle, seq_data_desc>
 data_for_parametric_3d(const expr (&exprs)[3], samples_setting isosamples, samples_setting samples,
                        range_setting u_range, range_setting v_range)
@@ -782,50 +821,77 @@ draw_info grid_lines_draw_info(const grid_data_desc &d)
   auto num_points = d.num_columns * d.num_rows;
   auto indices = grid_indices_for_lines(num_points, d.num_columns);
   auto ebo = make_vbo();
-  glBindVertexArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, ebo);
   glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
   auto count = std::vector<GLsizei>();
   count.reserve(d.num_columns + d.num_rows);
   std::fill_n(std::back_inserter(count), d.num_columns, d.num_rows);
   std::fill_n(std::back_inserter(count), d.num_rows, d.num_columns);
-  return draw_info(std::move(ebo), static_cast<uint32_t>(indices.size()), std::move(count));
+  return draw_info(std::move(ebo), std::move(count));
 }
 
 draw_info sequential_draw_info(const seq_data_desc &d)
 {
-  auto indices = std::vector<GLint>();
+  auto indices = std::vector<GLuint>();
   indices.reserve(d.num_points);
   for (auto i = 0u; i < d.num_points; ++i)
   {
-    indices.push_back(static_cast<GLint>(i));
+    indices.push_back(i);
   }
   auto ebo = make_vbo();
-  glBindVertexArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, ebo);
-  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
-  return draw_info(std::move(ebo), static_cast<uint32_t>(indices.size()), d.count);
+  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+  return draw_info(std::move(ebo), d.count);
 }
 
 draw_info sequential_draw_info(const grid_data_desc &d)
 {
   auto num_points = d.num_columns * d.num_rows;
-  auto indices = std::vector<GLint>();
+  auto indices = std::vector<GLuint>();
   indices.reserve(num_points);
   for (auto i = 0u; i < num_points; ++i)
   {
-    indices.push_back(static_cast<GLint>(i));
+    indices.push_back(i);
   }
   auto ebo = make_vbo();
-  glBindVertexArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, ebo);
-  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLint), indices.data(), GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
   auto count = std::vector<GLsizei>{static_cast<GLsizei>(num_points)};
-  return draw_info(std::move(ebo), static_cast<uint32_t>(indices.size()), std::move(count));
+  return draw_info(std::move(ebo), std::move(count));
 }
 
-draw_info::draw_info(vbo_handle indices, uint32_t num_indices, std::vector<GLsizei> c)
-    : ebo(std::move(indices)), num_indices(num_indices), count(std::move(c))
+draw_info surface_draw_info(const grid_data_desc &d)
+{
+  const auto index = [&](uint32_t r, uint32_t c) { return r * d.num_columns + c; };
+
+  const auto num_points = d.num_columns * d.num_rows;
+  auto indices = std::vector<GLuint>();
+  // every point is used twice, except for first and last row
+  indices.reserve(2 * num_points - 2 * d.num_columns);
+  for (auto row = 1u; row < d.num_rows; ++row)
+  {
+    for (auto column = 0u; column < d.num_columns; ++column)
+    {
+      indices.push_back(index(row - 1, column));
+      indices.push_back(index(row, column));
+    }
+  }
+
+  auto ebo = make_vbo();
+  glBindVertexArray(0);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(),
+               GL_STATIC_DRAW);
+  auto count = std::vector<GLsizei>();
+  count.reserve(d.num_rows - 1);
+  std::fill_n(std::back_inserter(count), d.num_rows - 1, 2 * d.num_columns);
+  assert(indices.size() == static_cast<size_t>(std::ranges::fold_left(count, 0, std::plus<>{})));
+  return draw_info(std::move(ebo), std::move(count));
+}
+
+draw_info::draw_info(vbo_handle indices, std::vector<GLsizei> c)
+    : ebo(std::move(indices)), num_indices(std::ranges::fold_left(c, 0u, std::plus<>{})),
+      count(std::move(c))
 {
   auto start = intptr_t(0);
   starts.reserve(count.size());
@@ -933,9 +999,17 @@ std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_
                 overload(
                     [&](const expr &expr) -> std::tuple<vbo_handle, data_desc>
                     {
-                      return data_for_expression_3d(expr, settings::isosamples(),
-                                                    settings::samples(), plot.x_range,
-                                                    plot.y_range);
+                      if (settings::hidden3d())
+                      {
+                        return grid_data_for_expression_3d(expr, settings::samples(), plot.x_range,
+                                                           plot.y_range);
+                      }
+                      else
+                      {
+                        return data_for_expression_3d(expr, settings::isosamples(),
+                                                      settings::samples(), plot.x_range,
+                                                      plot.y_range);
+                      }
                     },
                     [&](const csv_data &c) -> std::tuple<vbo_handle, data_desc>
                     {
@@ -943,7 +1017,8 @@ std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_
                           row_data, [&](const struct row_data &r)
                           { return r.filename == c.path && r.columns.has_value() == c.matrix; });
                       auto vbo = data_for_using_expressions(c.expressions, rd);
-                      if (rd.columns.has_value() && g.mark == mark_type_3d::lines)
+                      if (rd.columns.has_value()
+                          && (g.mark == mark_type_3d::lines || g.mark == mark_type_3d::surface))
                       {
                         return std::make_tuple(
                             std::move(vbo),

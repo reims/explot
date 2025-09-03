@@ -26,7 +26,7 @@ layout (location = 3) in vec2 screen_dimensions;
 layout (location = 4) in vec2 pos;
 out vec2 uv;
 
-uniform vec2 offset;
+uniform vec3 offset;
 
 layout(binding = 1) uniform GeometryTransforms
 {
@@ -37,7 +37,7 @@ layout(binding = 1) uniform GeometryTransforms
 void main()
 {
   uv = uv_lower_bounds + pos * uv_dimensions;
-  gl_Position = screen_to_clip * vec4(offset + screen_lower_bounds + pos * screen_dimensions, 0, 1);
+  gl_Position = screen_to_clip * vec4(offset.xy + screen_lower_bounds + pos * screen_dimensions, offset.z, 1);
 }
 )shader";
 
@@ -335,12 +335,14 @@ void draw(const gl_string &str)
   glDrawArraysInstanced(GL_TRIANGLES, 0, num_points, str.size);
 }
 
-void update(const gl_string &str, const glm::vec2 &offset, const glm::vec2 &anchor)
+void update(const gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor)
 {
-  const auto offset_with_anchor =
-      glm::floor(offset - anchor * str.upper_bounds - (1.0f - anchor) * str.lower_bounds);
+  const auto offset2 = glm::vec2(offset.x, offset.y);
+  const auto offset_with_anchor = glm::vec3(
+      glm::floor(offset2 - anchor * str.upper_bounds - (1.0f - anchor) * str.lower_bounds),
+      offset.z);
   glUseProgram(str.program);
-  glUniform2fv(glGetUniformLocation(str.program, "offset"), 1, glm::value_ptr(offset_with_anchor));
+  glUniform3fv(glGetUniformLocation(str.program, "offset"), 1, glm::value_ptr(offset_with_anchor));
 }
 
 void draw(const font_atlas &atlas, const glm::mat4 &screen_to_clip, const glm::vec2 &offset)

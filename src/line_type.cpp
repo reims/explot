@@ -36,7 +36,8 @@ std::vector<line_type> resolve_line_types_(std::span<const T> graphs)
                                    });
                                return line_type{.width = lt.width.value_or(ref.width),
                                                 .color = lt.color.value_or(ref.color),
-                                                .dash_type = dt};
+                                                .dash_type = dt,
+                                                .index = idx};
                              }),
                          g.line_type);
     result.push_back(lt);

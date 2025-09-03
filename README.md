@@ -35,6 +35,9 @@ dependencies.
 ### Splot example
 ![`splot sin(x/3)*cos(x/3) with lines`](./img/splot_example.png)
 
+### Hidden3d example
+![`splot sin(sqrt(x*x + y*y))/sqrt(x*x * y*y)`](./img/hidden3d.png)
+
 ## Features
 
 ### Gnuplot featues
@@ -54,7 +57,7 @@ dependencies.
   - [ ] filledcurve
   - [ ] boxes
   - [ ] pm3d
-  - [ ] hiddden3d
+  - [x] hiddden3d
   - [ ] vectors
   - [ ] error bars
   

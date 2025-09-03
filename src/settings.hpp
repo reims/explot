@@ -20,6 +20,7 @@ bool parametric();
 const line_type &line_type_by_index(uint32_t idx);
 const char *timefmt();
 data_type xdata();
+bool hidden3d();
 
 namespace datafile
 {

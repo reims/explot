@@ -1,5 +1,6 @@
 #include "settings.hpp"
 #include <fmt/format.h>
+#include "commands.hpp"
 #include "overload.hpp"
 #include "colors.hpp"
 #include <type_traits>
@@ -49,9 +50,9 @@ std::string to_string_<range_setting>(const range_setting &range)
   return fmt::format("[{}:{}]", l_str, u_str);
 }
 
-static constexpr line_type line_types[] = {{1.f, from_rgb(0xa3be8c), std::nullopt},
-                                           {1.f, from_rgb(0xebcb8b), std::nullopt},
-                                           {1.f, from_rgb(0xd08770), std::nullopt}};
+static constexpr line_type line_types[] = {{1.f, from_rgb(0xa3be8c), std::nullopt, 1},
+                                           {1.f, from_rgb(0xebcb8b), std::nullopt, 2},
+                                           {1.f, from_rgb(0xd08770), std::nullopt, 3}};
 static constexpr auto num_line_types = std::size(line_types);
 
 template <settings_id id>
@@ -123,6 +124,7 @@ const line_type &line_type_by_index(uint32_t idx)
   assert(idx > 0);
   return line_types[(idx - 1) % num_line_types];
 }
+bool hidden3d() { return place<settings_id::hidden3d>; }
 
 namespace datafile
 {

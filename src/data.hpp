@@ -33,7 +33,7 @@ using data_desc = std::variant<seq_data_desc, grid_data_desc>;
 struct draw_info
 {
   draw_info() = default;
-  draw_info(vbo_handle ebo, uint32_t num_indices, std::vector<GLsizei> count);
+  draw_info(vbo_handle ebo, std::vector<GLsizei> count);
 
   vbo_handle ebo;
   uint32_t num_indices;

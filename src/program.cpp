@@ -85,6 +85,20 @@ program_handle make_program(const char *geometry_shader_src, const char *vertex_
   return program;
 }
 
+program_handle make_compute_program(const char *compute_shader_src)
+{
+  auto program = make_program();
+
+  auto compute_shader = glCreateShader(GL_COMPUTE_SHADER);
+  glShaderSource(compute_shader, 1, &compute_shader_src, nullptr);
+  glCompileShader(compute_shader);
+  glAttachShader(program, compute_shader);
+  glLinkProgram(program);
+  glDeleteShader(compute_shader);
+
+  return program;
+}
+
 void set_uniforms(gl_id program, std::span<const uniform> uniforms)
 {
   glUseProgram(program);

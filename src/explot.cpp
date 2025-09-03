@@ -66,6 +66,7 @@ static constexpr auto uimain = [](auto commands)
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_DEBUG_OUTPUT);
   glDebugMessageCallback(message_callback, 0);
+  glEnable(GL_DEPTH_TEST);
 
   init_events(window);
 
@@ -112,7 +113,7 @@ static constexpr auto uimain = [](auto commands)
     // fmt::print("start frame\n");
     glfwPollEvents();
     glClearColor(background_color.x, background_color.y, background_color.z, 1.00f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     int width = 0, height = 0;
     glfwGetFramebufferSize(window, &width, &height);

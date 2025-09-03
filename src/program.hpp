@@ -13,6 +13,8 @@ program_handle make_program_with_varying(const char *shader_src, std::span<const
 program_handle make_program(const char *geometry_shader_src, const char *vertex_shader_src,
                             const char *fragment_shader_src);
 
+program_handle make_compute_program(const char *compute_shader_src);
+
 using uniform_value = std::variant<float, glm::vec4, glm::vec2, glm::mat4, uint32_t,
                                    std::span<const float>, std::span<const uint32_t>>;
 using uniform = std::pair<const char *, uniform_value>;

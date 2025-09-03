@@ -1,4 +1,5 @@
 #include "prefix_sum.hpp"
+#include "program.hpp"
 // #include <fmt/format.h>
 // #include <fstream>
 
@@ -89,40 +90,13 @@ void main()
 
 static constexpr auto mask = (1u << 10) - 1u;
 
-program_handle make_first_pass_program()
-{
-  auto compute = glCreateShader(GL_COMPUTE_SHADER);
-  glShaderSource(compute, 1, &first_pass_shader, nullptr);
-  glCompileShader(compute);
-  auto program = make_program();
-  glAttachShader(program, compute);
-  glLinkProgram(program);
-  glDeleteShader(compute);
-  return program;
-}
+program_handle make_first_pass_program() { return make_compute_program(first_pass_shader); }
 
-program_handle make_second_pass_program()
-{
-  auto compute = glCreateShader(GL_COMPUTE_SHADER);
-  glShaderSource(compute, 1, &second_pass_shader, nullptr);
-  glCompileShader(compute);
-  auto program = make_program();
-  glAttachShader(program, compute);
-  glLinkProgram(program);
-  glDeleteShader(compute);
-  return program;
-}
+program_handle make_second_pass_program() { return make_compute_program(second_pass_shader); }
 
 program_handle make_sequential_pass_program()
 {
-  auto compute = glCreateShader(GL_COMPUTE_SHADER);
-  glShaderSource(compute, 1, &sequential_pass_shader, nullptr);
-  glCompileShader(compute);
-  auto program = make_program();
-  glAttachShader(program, compute);
-  glLinkProgram(program);
-  glDeleteShader(compute);
-  return program;
+  return make_compute_program(sequential_pass_shader);
 }
 
 void first_pass(gl_id prog, uint32_t stride, uint32_t count)
@@ -157,11 +131,8 @@ void sequential_pass(gl_id prog, uint32_t start, uint32_t stride, uint32_t count
       count -= 1;
     }
     glUseProgram(prog);
-    // uniform ufs[] = {{"stride", stride}, {"count", count}, {"start", start}};
-    // set_uniforms(prog, ufs);
-    glUniform1ui(glGetUniformLocation(prog, "stride"), stride);
-    glUniform1ui(glGetUniformLocation(prog, "count"), count);
-    glUniform1ui(glGetUniformLocation(prog, "start"), start);
+    uniform ufs[] = {{"stride", stride}, {"count", count}, {"start", start}};
+    set_uniforms(prog, ufs);
     glDispatchCompute(1, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   }

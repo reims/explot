@@ -1,4 +1,5 @@
 #include "parse_ast.hpp"
+#include "commands.hpp"
 // clang 19 implements P1907R1 only partially and the feature flag is missing.
 // the implementation is enough for nttp use in lexy, though
 #define LEXY_HAS_NTTP 1
@@ -1041,7 +1042,8 @@ struct settings_parser
          >> (LEXY_KEYWORD("separator", kw_id) >> dsl::p<parser<settings_id::datafile_separator>>))
       | (LEXY_KEYWORD("xrange", kw_id) >> dsl::p<parser<settings_id::xrange>>)
       | (LEXY_KEYWORD("parametric", kw_id) >> dsl::p<parser<settings_id::parametric>>)
-      | (LEXY_KEYWORD("timefmt", kw_id) >> dsl::p<parser<settings_id::timefmt>>);
+      | (LEXY_KEYWORD("timefmt", kw_id) >> dsl::p<parser<settings_id::timefmt>>)
+      | (LEXY_KEYWORD("hidden3d", kw_id) >> dsl::p<parser<settings_id::hidden3d>>);
   static constexpr auto value = lexy::construct<enum_sum_t<settings_id, vv, all_settings>>;
 };
 
