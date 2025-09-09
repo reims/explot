@@ -36,7 +36,7 @@ dependencies.
 ![`splot sin(x/3)*cos(x/3) with lines`](./img/splot_example.png)
 
 ### Hidden3d example
-![`splot sin(sqrt(x*x + y*y))/sqrt(x*x * y*y)`](./img/hidden3d.png)
+![`splot sin(sqrt(x*x + y*y))/sqrt(x*x + y*y)`](./img/hidden3d.png)
 
 ## Features
 
@@ -53,6 +53,7 @@ dependencies.
 - Plotting styles:
   - [x] points
   - [x] lines
+    - [x] dashed lines
   - [x] impulses (2d only)
   - [ ] filledcurve
   - [ ] boxes
@@ -67,6 +68,8 @@ dependencies.
 - [ ] Parameters for expressions that can be changed
       interactively. They will probably use a syntax like `$p1`, `$p2`
       etc similar to columns.
+- [ ] Time variable (e.g. `$t`) for expressions, so that plots can
+      change over time.
 - [ ] Color schemes. Right now the colors are taken from the [nord
       theme](https://www.nordtheme.com/). It would be nice to have
       named color schemes.
