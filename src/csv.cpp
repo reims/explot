@@ -139,7 +139,6 @@ read_matrix_csv(const std::filesystem::path &p, char delim, std::optional<time_p
   auto result = std::vector<float>();
 
   auto f = std::ifstream(p, std::ios::binary);
-  auto timefmt = settings::timefmt();
   auto columns = std::optional<unsigned int>();
   auto column = 0u;
   auto row = 0u;

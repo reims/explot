@@ -112,8 +112,6 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                                                   unit, const rect &screen,
                                                                   const drag &d)
                                                               {
-                                                                auto screen_to_clip =
-                                                                    transform(screen, clip_rect);
                                                                 draw(const_get(res),
                                                                      drag_to_rect(
                                                                          d, screen.upper_bounds.y));
@@ -135,8 +133,7 @@ rx::observable<rx::observable<unit>> plot_renderer(rx::observe_on_one_worker &on
                                           auto &[view, screen] = views;
                                           update(const_get(res).plot, screen, view);
                                           auto view_to_screen = transform(view, screen);
-                                          auto screen_to_clip = transform(screen, clip_rect);
-                                          update(*cs, view_to_screen, screen_to_clip);
+                                          update(*cs, view_to_screen);
                                           return unit{};
                                         },
                                         coordinate_systems);

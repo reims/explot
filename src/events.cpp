@@ -38,7 +38,7 @@ void mouse_move_cb(GLFWwindow *, double xpos, double ypos)
   mouse_move_subscriber.on_next(glm::vec2(static_cast<float>(xpos), static_cast<float>(ypos)));
 }
 
-void mouse_button_cb(GLFWwindow *, int button, int action, int mods)
+void mouse_button_cb(GLFWwindow *, int button, int action, int)
 {
   if (action == GLFW_PRESS)
   {
@@ -50,7 +50,7 @@ void mouse_button_cb(GLFWwindow *, int button, int action, int mods)
   }
 }
 
-void key_press_cb(GLFWwindow *, int key, int scancode, int action, int mods)
+void key_press_cb(GLFWwindow *, int key, int, int action, int)
 {
   if (action == GLFW_PRESS)
   {

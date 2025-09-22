@@ -38,6 +38,9 @@ dependencies.
 ### Hidden3d example
 ![`splot sin(sqrt(x*x + y*y))/sqrt(x*x + y*y)`](./img/hidden3d.png)
 
+### Pm3d example
+![`splot "matrix.csv" matrix with pm3d`](./img/pm3d.png)
+
 ## Features
 
 ### Gnuplot featues
@@ -57,7 +60,7 @@ dependencies.
   - [x] impulses (2d only)
   - [ ] filledcurve
   - [ ] boxes
-  - [ ] pm3d
+  - [x] pm3d (only colored surface, no projection to top or bottom)
   - [x] hiddden3d
   - [ ] vectors
   - [ ] error bars

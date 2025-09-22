@@ -27,7 +27,7 @@ auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lt
   return result;
 }
 
-auto bounding_rect(const graph3d &g) { return bounding_rect_3d(g.vbo, g.num_points); }
+auto bounding_rect(const graph3d &g) { return bounding_rect_3d(g.vbo, g.num_points, g.point_size); }
 
 auto bounding_rect_for_graphs(std::span<const graph3d> graphs)
 {

@@ -10,9 +10,6 @@
 #include <algorithm>
 #include <fontconfig/fontconfig.h>
 #include "program.hpp"
-#include "rect.hpp"
-#include <fstream>
-#include <ios>
 
 namespace
 {
@@ -121,8 +118,6 @@ std::pair<std::string, bool> preferred_monospace_font()
   return {std::string(static_cast<const char *>(pathVal.u.f)), invert};
 }
 
-static constexpr explot::rect uv_space{{0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}};
-
 auto init_ft()
 {
   FT_Library lib;
@@ -137,17 +132,20 @@ auto load_face(FT_Library lib, const char *path)
   return font_handle(face);
 }
 
+/*
 void write_ppm(const unsigned char *buffer, size_t dimx, size_t dimy, const char *filename)
 {
 
-  std::ofstream ofs(filename, std::ios::out | std::ios::binary);
-  ofs << "P6\n" << dimx << ' ' << dimy << "\n255\n";
+std::ofstream ofs(filename, std::ios::out | std::ios::binary);
+ofs << "P6\n" << dimx << ' ' << dimy << "\n255\n";
 
-  for (auto j = 0u; j < dimy; ++j)
-    for (auto i = 0u; i < dimx; ++i)
-      ofs << static_cast<char>(buffer[j * dimx + i]) << static_cast<char>(0)
-          << static_cast<char>(0);
+for (auto j = 0u; j < dimy; ++j)
+  for (auto i = 0u; i < dimx; ++i)
+    ofs << static_cast<char>(buffer[j * dimx + i]) << static_cast<char>(0)
+        << static_cast<char>(0);
 }
+
+*/
 } // namespace
 
 namespace explot

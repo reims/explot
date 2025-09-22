@@ -1,7 +1,9 @@
 #include "parse_commands.hpp"
+#include <expected>
 #include <string_view>
 #include <cassert>
 #include <fmt/format.h>
+#include <type_traits>
 #include <utility>
 #include <algorithm>
 #include <ranges>
@@ -204,51 +206,56 @@ validate_expression(ast::expr &&e, std::span<const std::string> vars, bool datar
   return std::visit(validator{vars, dataref_allowed}, std::move(e));
 }
 
-std::expected<csv_data, std::string> validate(mark_type_3d, ast::csv_data &&data)
+std::expected<csv_data, std::string> validate(mark_type_3d mark, ast::csv_data &&data)
 {
-  return [&] -> std::expected<std::vector<expr>, std::string>
-  {
-    switch (data.expressions.size())
-    {
-    case 0:
-      if (data.matrix)
-      {
-        return std::vector<expr>{data_ref(1), data_ref(2), data_ref(3)};
-      }
-      else
-      {
-        return std::vector<expr>{data_ref(0), literal_expr(0.0f), data_ref(1)};
-      }
-    case 1:
-      if (data.matrix)
-      {
-        return validate_expression(std::move(data.expressions[0]), {}, true)
-            .transform([](expr &&e)
-                       { return std::vector<expr>{data_ref(1), data_ref(2), std::move(e)}; });
-      }
-      else
-      {
-        return validate_expression(std::move(data.expressions[0]), {}, true)
-            .transform(
-                [](expr &&e)
-                { return std::vector<expr>{data_ref(0), literal_expr(0.0f), std::move(e)}; });
-      }
-    case 3:
-      return validate_all(
-          std::move(data.expressions)
-          | std::views::transform([](ast::expr &e)
-                                  { return validate_expression(std::move(e), {}, true); }));
-    default:
-      return std::unexpected("need 1 or 3 expressions for splot");
-    }
-  }()
-                    .transform(
-                        [&](std::vector<expr> &&es)
-                        {
-                          return csv_data{.path = std::move(data.path),
-                                          .expressions = std::move(es),
-                                          .matrix = data.matrix};
-                        });
+  return validate_all(std::move(data.expressions)
+                      | std::views::transform(
+                          [](ast::expr &e) { return validate_expression(std::move(e), {}, true); }))
+      .and_then(
+          [&](std::vector<expr> &&exprs) -> std::expected<std::vector<expr>, std::string>
+          {
+            switch (exprs.size())
+            {
+            case 0:
+              if (data.matrix)
+              {
+                return std::vector<expr>{data_ref(1), data_ref(2), data_ref(3)};
+              }
+              else
+              {
+                return std::vector<expr>{data_ref(0), literal_expr(0.0f), data_ref(1)};
+              }
+            case 1:
+              if (data.matrix)
+              {
+                return std::vector<expr>{data_ref(1), data_ref(2), std::move(exprs[0])};
+              }
+              else
+              {
+                return std::vector<expr>{data_ref(0), literal_expr(0.0f), std::move(exprs[0])};
+              }
+            case 3:
+              return std::move(exprs);
+            case 4:
+              if (mark == mark_type_3d::pm3d)
+              {
+                return std::move(exprs);
+              }
+              else
+              {
+                return std::unexpected("too many columns");
+              }
+            default:
+              return std::unexpected("too many columns");
+            }
+          })
+      .transform(
+          [&](std::vector<expr> &&es)
+          {
+            return csv_data{.path = std::move(data.path),
+                            .expressions = std::move(es),
+                            .matrix = data.matrix};
+          });
 }
 
 std::expected<csv_data, std::string> validate(mark_type_2d mark, ast::csv_data &&data)
@@ -333,7 +340,7 @@ std::expected<csv_data, std::string> validate(mark_type_2d mark, ast::csv_data &
                         });
 }
 
-std::expected<expr, std::string> validate(mark_type_2d mark, ast::expr &&e)
+std::expected<expr, std::string> validate(mark_type_2d, ast::expr &&e)
 {
   auto x = std::string("x");
   return validate_expression(std::move(e), {&x, 1}, false);
@@ -421,6 +428,8 @@ mark_type_3d transform_mark(ast::mark_type_3d mark)
     }
   case ast::mark_type_3d::points:
     return mark_type_3d::points;
+  case ast::mark_type_3d::pm3d:
+    return mark_type_3d::pm3d;
   }
 }
 
@@ -510,6 +519,24 @@ std::expected<plot_command_3d, std::string> validate(ast::plot_command_3d &&plot
           });
 }
 
+std::expected<set_command, std::string> validate(set_command &&cmd)
+{
+  return std::visit(
+      [&](auto &&v) -> std::expected<set_command, std::string>
+      {
+        if constexpr (std::remove_cvref_t<decltype(v)>::id == settings_id::pallette_rgbformulae)
+        {
+          auto &[ridx, gidx, bidx] = v.value;
+          if (std::abs(ridx) > 36 || std::abs(gidx) > 36 || std::abs(bidx) > 36)
+          {
+            return std::unexpected("rgbformulae must be in the range -36 .. 36");
+          }
+        }
+        return std::move(cmd);
+      },
+      cmd.value);
+}
+
 } // namespace
 
 namespace explot
@@ -524,7 +551,7 @@ std::expected<command, std::string> parse_command(const char *cmd)
                                [](ast::plot_command_3d &&cmd) -> std::expected<command, std::string>
                                { return validate(std::move(cmd)); },
                                [](set_command &&cmd) -> std::expected<command, std::string>
-                               { return std::move(cmd); },
+                               { return validate(std::move(cmd)); },
                                [](unset_command &&cmd) -> std::expected<command, std::string>
                                { return std::move(cmd); },
                                [](show_command &&cmd) -> std::expected<command, std::string>

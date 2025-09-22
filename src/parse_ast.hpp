@@ -92,7 +92,8 @@ enum struct mark_type_2d
 enum struct mark_type_3d
 {
   points,
-  lines
+  lines,
+  pm3d
 };
 
 using data_source_2d = std::variant<expr, csv_data, parametric_data_2d>;

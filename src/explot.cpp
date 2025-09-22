@@ -21,8 +21,8 @@ namespace
 {
 using namespace std::literals::chrono_literals;
 using namespace explot;
-void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
-                      const GLchar *message, const void *userParam)
+void message_callback(GLenum, GLenum type, GLuint id, GLenum, GLsizei, const GLchar *message,
+                      const void *)
 {
   if (type == GL_DEBUG_TYPE_ERROR)
   {

@@ -48,7 +48,7 @@ struct parsed_decimal : lexy::token_production
       [](lexeme s)
       {
         float f = 0.0;
-        auto [_, __] = std::from_chars(s.data(), s.data() + s.size(), f);
+        std::from_chars(s.data(), s.data() + s.size(), f);
         return f;
       });
 };
@@ -57,6 +57,12 @@ struct decimal_integer
 {
   static constexpr auto rule = dsl::integer<uint32_t>(dsl::digits<>);
   static constexpr auto value = lexy::as_integer<uint32_t>;
+};
+
+struct signed_integer
+{
+  static constexpr auto rule = dsl::minus_sign + dsl::integer<int>;
+  static constexpr auto value = lexy::as_integer<int>;
 };
 
 constexpr auto op_plus = dsl::op<ast::binary_operator::plus>(dsl::lit_c<'+'>);
@@ -121,7 +127,6 @@ struct expr_ : lexy::expression_production
 {
   static constexpr auto atom = dsl::p<r::atom>;
   static constexpr auto whitespace = dsl::ascii::space;
-  static constexpr auto max_recursion_depth = 19;
 
   struct power_op : dsl::infix_op_left
   {
@@ -190,7 +195,7 @@ static constexpr auto constant_builtins =
 template <size_t I>
 using constant_builtin_t = std::remove_cvref_t<decltype(std::get<I>(constant_builtins))>;
 
-std::optional<float> find_constant_(std::string_view name, std::index_sequence<>)
+std::optional<float> find_constant_(std::string_view, std::index_sequence<>)
 {
   return std::nullopt;
 }
@@ -347,7 +352,6 @@ struct const_expr_ : lexy::expression_production
 {
   static constexpr auto atom = dsl::p<r::const_atom>;
   static constexpr auto whitespace = dsl::ascii::space;
-  static constexpr auto max_recursion_depth = 19;
 
   struct power_op : dsl::infix_op_left
   {
@@ -606,7 +610,7 @@ struct with_3d
 {
   static constexpr auto whitespace = dsl::ascii::space;
   static constexpr auto rule = dsl::capture(LEXY_LIT("lines")) | dsl::capture(LEXY_LIT("points"))
-                               | dsl::capture(LEXY_LIT("impulses"));
+                               | dsl::capture(LEXY_LIT("pm3d"));
   static constexpr auto value = lexy::callback<ast::mark_type_3d>(
       [](const auto &s)
       {
@@ -615,9 +619,13 @@ struct with_3d
         {
           return ast::mark_type_3d::lines;
         }
-        else // if (ss == "points")
+        else if (ss == "points")
         {
           return ast::mark_type_3d::points;
+        }
+        else
+        {
+          return ast::mark_type_3d::pm3d;
         }
       });
 };
@@ -1043,7 +1051,9 @@ struct settings_parser
       | (LEXY_KEYWORD("xrange", kw_id) >> dsl::p<parser<settings_id::xrange>>)
       | (LEXY_KEYWORD("parametric", kw_id) >> dsl::p<parser<settings_id::parametric>>)
       | (LEXY_KEYWORD("timefmt", kw_id) >> dsl::p<parser<settings_id::timefmt>>)
-      | (LEXY_KEYWORD("hidden3d", kw_id) >> dsl::p<parser<settings_id::hidden3d>>);
+      | (LEXY_KEYWORD("hidden3d", kw_id) >> dsl::p<parser<settings_id::hidden3d>>)
+      | (LEXY_KEYWORD("palette", kw_id) >> (LEXY_KEYWORD("rgbformulae", kw_id)
+                                            >> dsl::p<parser<settings_id::pallette_rgbformulae>>));
   static constexpr auto value = lexy::construct<enum_sum_t<settings_id, vv, all_settings>>;
 };
 
@@ -1094,7 +1104,7 @@ struct set
         [](float v, lexy::nullopt)
         { return samples_setting(static_cast<uint32_t>(v), static_cast<uint32_t>(v)); },
         [](float v1, float v2)
-        { return samples_setting(static_cast<uint32_t>(v2), static_cast<uint32_t>(v2)); });
+        { return samples_setting(static_cast<uint32_t>(v1), static_cast<uint32_t>(v2)); });
   };
 
   template <>
@@ -1136,6 +1146,13 @@ struct set
   {
     static constexpr auto rule = dsl::p<string>;
     static constexpr auto value = lexy::forward<std::string>;
+  };
+
+  template <>
+  struct value_parser<std::tuple<int, int, int>>
+  {
+    static constexpr auto rule = dsl::times<3>(dsl::p<signed_integer>, dsl::sep(dsl::comma));
+    static constexpr auto value = lexy::construct<std::tuple<int, int, int>>;
   };
 
   template <settings_id id>

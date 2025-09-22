@@ -3,6 +3,7 @@
 #include "commands.hpp"
 #include "overload.hpp"
 #include "colors.hpp"
+#include <tuple>
 #include <type_traits>
 
 namespace
@@ -50,6 +51,12 @@ std::string to_string_<range_setting>(const range_setting &range)
   return fmt::format("[{}:{}]", l_str, u_str);
 }
 
+template <>
+std::string to_string_(const std::tuple<int, int, int> &t)
+{
+  return fmt::format("{},{},{}", std::get<0>(t), std::get<1>(t), std::get<2>(t));
+}
+
 static constexpr line_type line_types[] = {{1.f, from_rgb(0xa3be8c), std::nullopt, 1},
                                            {1.f, from_rgb(0xebcb8b), std::nullopt, 2},
                                            {1.f, from_rgb(0xd08770), std::nullopt, 3}};
@@ -85,8 +92,52 @@ samples_setting default_value<settings_id::isosamples>()
   return {10, 10};
 }
 
+template <>
+std::tuple<int, int, int> default_value<settings_id::pallette_rgbformulae>()
+{
+  return std::make_tuple(7, 5, 15);
+}
+
 template <settings_id id>
 settings_type_t<id> place = default_value<id>();
+
+static constexpr std::string_view rgbformulae[] = {"0",
+                                                   "0.5",
+                                                   "1",
+                                                   "x",
+                                                   "x*x",
+                                                   "x*x*x",
+                                                   "x*x*x*x",
+                                                   "sqrt(x)",
+                                                   "sqrt(sqrt(x))",
+                                                   "sin(1.570796 * x)",
+                                                   "cos(1.570796 * x)",
+                                                   "abs(x-0.5)",
+                                                   "(2x-1) * (2x-1)",
+                                                   "sin(3.141593 * x)",
+                                                   "abs(cos(3.141593 * x))",
+                                                   "sin(6.283185 * x)",
+                                                   "cos(6.283185 * x)",
+                                                   "abs(sin(6.283185 * x))",
+                                                   "abs(cos(6.283185 * x))",
+                                                   "abs(sin(12.56637 * x))",
+                                                   "abs(cos(12.56637 * x))",
+                                                   "3 * x",
+                                                   "3 * x - 1",
+                                                   "3 * x - 2",
+                                                   "abs(3 * x - 1)",
+                                                   "abs(3 * x - 2)",
+                                                   "(3 * x - 1) / 2",
+                                                   "(3 * x - 2) / 2",
+                                                   "abs(3 * x - 1) / 2",
+                                                   "abs(3 * x - 2) / 2",
+                                                   "x / 0.32 - 0.78125",
+                                                   "2 * x - 0.84",
+                                                   "4*x",
+                                                   "abs(2 * x - 0.5)",
+                                                   "2 * x",
+                                                   "2 * x - 0.5",
+                                                   "2 * x - 1"};
 
 } // namespace
 
@@ -126,9 +177,20 @@ const line_type &line_type_by_index(uint32_t idx)
 }
 bool hidden3d() { return place<settings_id::hidden3d>; }
 
+std::string_view rgbformula(uint32_t idx)
+{
+  assert(idx < std::extent_v<decltype(rgbformulae)>);
+  return rgbformulae[idx];
+}
+
 namespace datafile
 {
 char separator() { return place<settings_id::datafile_separator>; }
 } // namespace datafile
+
+namespace palette
+{
+std::tuple<int, int, int> rgbformulae() { return place<settings_id::pallette_rgbformulae>; }
+} // namespace palette
 } // namespace settings
 } // namespace explot

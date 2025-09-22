@@ -753,7 +753,7 @@ std::tuple<vbo_handle, grid_data_desc> grid_data_for_expression_3d(const expr &e
   glUniform1f(glGetUniformLocation(program, "step_y"), step_y);
   glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(num_points));
   glEndTransformFeedback();
-  return std::make_tuple(std::move(vbo), grid_data_desc(samples.y, samples.x));
+  return std::make_tuple(std::move(vbo), grid_data_desc(samples.y, samples.x, 3));
 }
 
 std::tuple<vbo_handle, seq_data_desc>
@@ -999,7 +999,7 @@ std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_
                 overload(
                     [&](const expr &expr) -> std::tuple<vbo_handle, data_desc>
                     {
-                      if (settings::hidden3d())
+                      if (g.mark == mark_type_3d::surface || g.mark == mark_type_3d::pm3d)
                       {
                         return grid_data_for_expression_3d(expr, settings::samples(), plot.x_range,
                                                            plot.y_range);
@@ -1018,11 +1018,13 @@ std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_
                           { return r.filename == c.path && r.columns.has_value() == c.matrix; });
                       auto vbo = data_for_using_expressions(c.expressions, rd);
                       if (rd.columns.has_value()
-                          && (g.mark == mark_type_3d::lines || g.mark == mark_type_3d::surface))
+                          && (g.mark == mark_type_3d::lines || g.mark == mark_type_3d::surface
+                              || g.mark == mark_type_3d::pm3d))
                       {
                         return std::make_tuple(
                             std::move(vbo),
-                            grid_data_desc(rd.num_points / *rd.columns, *rd.columns));
+                            grid_data_desc(rd.num_points / *rd.columns, *rd.columns,
+                                           static_cast<uint32_t>(c.expressions.size())));
                       }
                       else
                       {

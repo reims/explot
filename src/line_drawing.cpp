@@ -768,7 +768,6 @@ dashed_line_strip_state_2d::dashed_line_strip_state_2d(
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
 
   uint32_t num_segments = 0;
-  uint32_t idx_in_uint = 0;
   std::vector<uint32_t> segments(1, 0u);
   for (auto [solid, space] : dash_type)
   {

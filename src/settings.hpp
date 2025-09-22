@@ -22,9 +22,16 @@ const char *timefmt();
 data_type xdata();
 bool hidden3d();
 
+std::string_view rgbformula(uint32_t idx);
+
 namespace datafile
 {
 char separator();
+}
+
+namespace palette
+{
+std::tuple<int, int, int> rgbformulae();
 }
 } // namespace settings
 } // namespace explot

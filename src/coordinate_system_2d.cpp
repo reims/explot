@@ -168,8 +168,7 @@ coordinate_system_2d::coordinate_system_2d(const tics_desc &tics, uint32_t num_t
   set_uniforms(program_for_ticks, common_ufs);
 }
 
-void update(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen,
-            const glm::mat4 &screen_to_clip)
+void update(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen)
 {
   const auto steps = (cs.bounding_rect.upper_bounds - cs.bounding_rect.lower_bounds)
                      / static_cast<float>(cs.num_ticks - 1);
@@ -206,8 +205,6 @@ void draw(const coordinate_system_2d &cs)
   set_uniforms(cs.program_for_ticks, y_ufs);
   glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(cs.num_ticks));
   draw(cs.axis);
-  const auto steps = (cs.bounding_rect.upper_bounds - cs.bounding_rect.lower_bounds)
-                     / static_cast<float>(cs.num_ticks - 1);
   for (auto i = 0u; i < cs.num_ticks; ++i)
   {
     draw(cs.x_labels[i]);

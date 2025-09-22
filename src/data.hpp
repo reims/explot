@@ -26,6 +26,7 @@ struct grid_data_desc
 {
   uint32_t num_rows;
   uint32_t num_columns;
+  uint32_t point_size;
 };
 
 using data_desc = std::variant<seq_data_desc, grid_data_desc>;

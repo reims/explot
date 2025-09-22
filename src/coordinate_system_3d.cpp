@@ -63,7 +63,7 @@ coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t 
 }
 
 void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
-            const glm::mat4 &clip_to_screen, const glm::mat4 &screen_to_clip)
+            const glm::mat4 &clip_to_screen, const glm::mat4 &)
 {
   const auto num_ticks = cs.xlabels.size();
   const auto step = 2.0f / static_cast<float>(num_ticks - 1);

@@ -32,5 +32,15 @@ struct surface_lines
                 const uniform_bindings_3d bds = {});
 };
 
+struct pm3d_surface
+{
+  vao_handle vao;
+  program_handle program;
+  draw_info data;
+
+  pm3d_surface(gl_id vbo, const grid_data_desc &d, const uniform_bindings_3d &bds = {});
+};
+
 void draw(const surface_lines &s);
+void draw(const pm3d_surface &s);
 } // namespace explot

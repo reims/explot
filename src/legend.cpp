@@ -3,6 +3,7 @@
 #include <string>
 #include <glm/glm.hpp>
 #include <unordered_set>
+#include "commands.hpp"
 #include "gl-handle.hpp"
 #include "rect.hpp"
 #include "overload.hpp"
@@ -116,6 +117,7 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
                                         {.phase_to_screen = ubo_bindings_start + i}));
       break;
     case mark_type_3d::surface:
+    case explot::mark_type_3d::pm3d:
       marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
                                         {.phase_to_screen = ubo_bindings_start + i}));
       break;
@@ -138,7 +140,6 @@ void update(const legend &l, const rect &screen)
   auto mats = std::make_unique<glm::mat4[]>(l.marks.size());
   for (auto i = 0u; i < l.titles.size(); ++i)
   {
-    const auto &m = l.marks[i];
     const auto &s = l.titles[i];
     const auto screen_rect = rect{
         .lower_bounds = {start_of_mark, screen.upper_bounds.y - (i + 1) * text_height - 10, -1.0f},

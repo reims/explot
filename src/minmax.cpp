@@ -97,6 +97,10 @@ vbo_handle prepare(gl_id dvbo, uint32_t num_points, uint32_t point_size, uint32_
   return vbo;
 }
 
+} // namespace
+
+namespace explot
+{
 glm::vec2 minmax(gl_id dvbo, uint32_t num_points, uint32_t point_size, uint32_t offset)
 {
   if (num_points == 0)
@@ -126,10 +130,6 @@ glm::vec2 minmax(gl_id dvbo, uint32_t num_points, uint32_t point_size, uint32_t 
   return result;
 }
 
-} // namespace
-
-namespace explot
-{
 glm::vec2 minmax_x(gl_id vbo, uint32_t num_points, uint32_t point_size)
 {
   return minmax(vbo, num_points, point_size, 0);
@@ -164,21 +164,21 @@ rect bounding_rect_2d(gl_id vbo, uint32_t num_points)
               .upper_bounds = glm::vec3(bx.y, by.y, 1.0f)};
 }
 
-rect bounding_rect_3d(gl_id vbo, uint32_t num_points)
+rect bounding_rect_3d(gl_id vbo, uint32_t num_points, uint32_t point_size)
 {
-  auto bx = minmax_x(vbo, num_points, 3);
+  auto bx = minmax_x(vbo, num_points, point_size);
   if (bx.y - bx.x < 1e-8)
   {
     bx.x -= 1.0f;
     bx.y += 1.0f;
   }
-  auto by = minmax_y(vbo, num_points, 3);
+  auto by = minmax_y(vbo, num_points, point_size);
   if (by.y - by.x < 1e-8)
   {
     by.x -= 1.0f;
     by.y += 1.0f;
   }
-  auto bz = minmax_z(vbo, num_points, 3);
+  auto bz = minmax_z(vbo, num_points, point_size);
   if (bz.y - bz.x < 1e-8)
   {
     bz.x -= 1.0f;

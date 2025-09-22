@@ -126,7 +126,8 @@ enum struct mark_type_3d
 {
   points,
   lines,
-  surface
+  surface,
+  pm3d
 };
 
 using data_source_2d = std::variant<expr, csv_data, parametric_data_2d>;
@@ -191,13 +192,15 @@ enum class settings_id
   parametric,
   timefmt,
   xdata,
-  hidden3d
+  hidden3d,
+  pallette_rgbformulae
 };
 
 using all_settings =
     enum_sequence<settings_id, settings_id::samples, settings_id::isosamples,
                   settings_id::datafile_separator, settings_id::xrange, settings_id::parametric,
-                  settings_id::timefmt, settings_id::xdata, settings_id::hidden3d>;
+                  settings_id::timefmt, settings_id::xdata, settings_id::hidden3d,
+                  settings_id::pallette_rgbformulae>;
 
 template <settings_id>
 struct settings_type
@@ -251,6 +254,12 @@ template <>
 struct settings_type<settings_id::hidden3d>
 {
   using type = bool;
+};
+
+template <>
+struct settings_type<settings_id::pallette_rgbformulae>
+{
+  using type = std::tuple<int, int, int>;
 };
 
 template <settings_id id>
