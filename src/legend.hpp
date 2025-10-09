@@ -21,12 +21,11 @@ struct legend
   std::vector<mark_state> marks;
   std::vector<glm::vec4> colors;
   std::vector<vbo_handle> vbos;
-  vbo_handle ubo;
 
   legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts);
   legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts);
 };
 
-void update(const legend &l, const rect &screen);
+void update(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip);
 void draw(const legend &l);
 } // namespace explot

@@ -82,4 +82,38 @@ rect drag_to_rect(const drag &d, float height)
   return {.lower_bounds = {min_x, height - max_y, -1.0f},
           .upper_bounds = {max_x, height - min_y, 1.0f}};
 }
+
+rect drag_to_rect(const drag &d)
+{
+  auto [min_x, max_x] = std::minmax(d.from.x, d.to.x);
+  auto [min_y, max_y] = std::minmax(d.from.y, d.to.y);
+  return {.lower_bounds = {min_x, min_y, -1.0f}, .upper_bounds = {max_x, max_y, 1.0f}};
+}
+
+rx::observable<rx::observable<drag>> drags(rx::observable<rect> screen, const rect &part)
+{
+  auto mousedowns = mouse_down_observable.with_latest_from([](int, glm::vec2 pos) { return pos; },
+                                                           mouse_move_observable);
+  auto all_drags =
+      mousedowns
+          .with_latest_from(
+              [=](glm::vec2 pos, const rect &screen)
+              {
+                auto height = screen.upper_bounds.y - screen.lower_bounds.y;
+                auto screen_pos = glm::vec2(pos.x, height - pos.y);
+                return std::make_tuple(screen_pos, part_of(screen, part),
+                                       mouse_move_observable.take_until(mouse_up_observable)
+                                           .transform(
+                                               [=](const glm::vec2 to)
+                                               {
+                                                 return drag{.from = screen_pos,
+                                                             .to = glm::vec2(to.x, height - to.y)};
+                                               })
+                                           .as_dynamic());
+              },
+              screen)
+          .filter([](const auto &t) { return contains(std::get<1>(t), std::get<0>(t)); })
+          .transform([](const auto &t) { return std::get<2>(t); });
+  return all_drags;
+}
 } // namespace explot

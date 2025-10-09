@@ -53,6 +53,11 @@ graph3d::graph3d(vbo_handle v, const data_desc &data, mark_type_3d mark, line_ty
 {
 }
 
+void update(const graph3d &graph, const transforms_3d transforms)
+{
+  std::visit([&](const auto &s) { update(s, transforms); }, graph.graph);
+}
+
 void draw(const graph3d &graph)
 {
   std::visit(overload([](const line_strip_state_3d &lines) { draw(lines); },

@@ -34,4 +34,7 @@ tics_desc round_for_ticks_3d(const rect &r, int num_ticks, int digits);
 rect union_rect(const rect &r1, const rect &r2);
 
 std::string format_for_tic(float value, int lsd);
+
+rect part_of(const rect &whole, const rect &relative);
+bool contains(const rect &r, const glm::vec2 &p);
 } // namespace explot

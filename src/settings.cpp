@@ -57,6 +57,12 @@ std::string to_string_(const std::tuple<int, int, int> &t)
   return fmt::format("{},{},{}", std::get<0>(t), std::get<1>(t), std::get<2>(t));
 }
 
+template <>
+std::string to_string_(const multiplot_setting &m)
+{
+  return fmt::format("layout {}, {}", m.rows, m.cols);
+}
+
 static constexpr line_type line_types[] = {{1.f, from_rgb(0xa3be8c), std::nullopt, 1},
                                            {1.f, from_rgb(0xebcb8b), std::nullopt, 2},
                                            {1.f, from_rgb(0xd08770), std::nullopt, 3}};
@@ -96,6 +102,12 @@ template <>
 std::tuple<int, int, int> default_value<settings_id::pallette_rgbformulae>()
 {
   return std::make_tuple(7, 5, 15);
+}
+
+template <>
+multiplot_setting default_value<settings_id::multiplot>()
+{
+  return {1, 1};
 }
 
 template <settings_id id>
@@ -182,6 +194,8 @@ std::string_view rgbformula(uint32_t idx)
   assert(idx < std::extent_v<decltype(rgbformulae)>);
   return rgbformulae[idx];
 }
+
+const multiplot_setting &multiplot() { return place<settings_id::multiplot>; }
 
 namespace datafile
 {

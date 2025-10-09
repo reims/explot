@@ -8,6 +8,7 @@
 #include "settings.hpp"
 #include <bit>
 #include "minmax.hpp"
+#include <glm/gtc/type_ptr.hpp>
 
 namespace
 {
@@ -15,10 +16,7 @@ using namespace explot;
 constexpr auto vertex_shader_src = R"(#version 330 core
 layout (location = 0) in vec3 position;
 
-uniform PhaseToClip
-{
-  mat4 phase_to_clip;
-};
+uniform mat4 phase_to_clip;
 
 void main()
 {
@@ -124,10 +122,7 @@ layout (location = 0) in vec3 position;
 
 out float color_value;
 
-uniform PhaseToClip
-{
-  mat4 phase_to_clip;
-};
+uniform mat4 phase_to_clip;
 
 void main()
 {
@@ -143,10 +138,7 @@ layout (location = 1) in float cv;
 
 out float color_value;
 
-uniform PhaseToClip
-{
-  mat4 phase_to_clip;
-};
+uniform mat4 phase_to_clip;
 
 void main()
 {
@@ -226,21 +218,12 @@ void normals(gl_id vbo, const grid_data_desc &d, gl_id out)
   // glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 }
 
-auto program_for_surface(const uniform_bindings_3d &bds)
-{
-  auto program = make_program(nullptr, vertex_shader_src, fragment_shader_src);
-
-  glUseProgram(program);
-  auto phase_to_clip_idx = glGetUniformBlockIndex(program, "PhaseToClip");
-  glUniformBlockBinding(program, phase_to_clip_idx, bds.phase_to_clip);
-
-  return program;
-}
+auto program_for_surface() { return make_program(nullptr, vertex_shader_src, fragment_shader_src); }
 
 constexpr auto x = "x";
 constexpr auto one_minus_x = "1 - x";
 
-auto program_for_pm3d_implicit_color(const uniform_bindings_3d &bds)
+auto program_for_pm3d_implicit_color()
 {
   auto [ridx, gidx, bidx] = settings::palette::rgbformulae();
   auto rformula = settings::rgbformula(static_cast<uint32_t>(std::abs(ridx)));
@@ -249,15 +232,10 @@ auto program_for_pm3d_implicit_color(const uniform_bindings_3d &bds)
   auto fragment_shader =
       fmt::format(pm3d_fragment_shader, rformula, gformula, bformula, ridx < 0 ? one_minus_x : x,
                   gidx < 0 ? one_minus_x : x, bidx < 0 ? one_minus_x : x);
-  auto program = make_program(nullptr, pm3d_implicit_color_vertex_shader, fragment_shader.c_str());
-  glUseProgram(program);
-  auto phase_to_clip_idx = glGetUniformBlockIndex(program, "PhaseToClip");
-  glUniformBlockBinding(program, phase_to_clip_idx, bds.phase_to_clip);
-
-  return program;
+  return make_program(nullptr, pm3d_implicit_color_vertex_shader, fragment_shader.c_str());
 }
 
-auto program_for_pm3d_explicit_color(const uniform_bindings_3d &bds)
+auto program_for_pm3d_explicit_color()
 {
   auto [ridx, gidx, bidx] = settings::palette::rgbformulae();
   auto rformula = settings::rgbformula(static_cast<uint32_t>(std::abs(ridx)));
@@ -267,21 +245,22 @@ auto program_for_pm3d_explicit_color(const uniform_bindings_3d &bds)
       fmt::format(pm3d_fragment_shader, rformula, gformula, bformula, ridx < 0 ? one_minus_x : x,
                   gidx < 0 ? one_minus_x : x, bidx < 0 ? one_minus_x : x);
 
-  auto program = make_program(nullptr, pm3d_explicit_color_vertex_shader, fragment_shader.c_str());
-  glUseProgram(program);
-  auto phase_to_clip_idx = glGetUniformBlockIndex(program, "PhaseToClip");
-  glUniformBlockBinding(program, phase_to_clip_idx, bds.phase_to_clip);
+  return make_program(nullptr, pm3d_explicit_color_vertex_shader, fragment_shader.c_str());
+}
 
-  return program;
+void set_phase_to_clip(gl_id program, const glm::mat4 &phase_to_clip)
+{
+  glUseProgram(program);
+  glUniformMatrix4fv(glGetUniformLocation(program, "phase_to_clip"), 1, GL_FALSE,
+                     glm::value_ptr(phase_to_clip));
 }
 
 } // namespace
 
 namespace explot
 {
-surface::surface(gl_id vbo, const grid_data_desc &d, const glm::vec4 &color,
-                 const uniform_bindings_3d &bds)
-    : vao(make_vao()), program(program_for_surface(bds)), data(surface_draw_info(d))
+surface::surface(gl_id vbo, const grid_data_desc &d, const glm::vec4 &color)
+    : vao(make_vao()), program(program_for_surface()), data(surface_draw_info(d))
 {
   auto uf = uniform{"color", color};
   set_uniforms(program, {&uf, 1});
@@ -293,6 +272,11 @@ surface::surface(gl_id vbo, const grid_data_desc &d, const glm::vec4 &color,
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
 }
 
+void update(const surface &s, const transforms_3d &transforms)
+{
+  set_phase_to_clip(s.program, transforms.phase_to_clip);
+}
+
 void draw(const surface &s)
 {
   glBindVertexArray(s.vao);
@@ -302,14 +286,20 @@ void draw(const surface &s)
                       s.data.count.size());
 }
 
-surface_lines::surface_lines(gl_id vbo, const grid_data_desc &d, const line_type &lt,
-                             const uniform_bindings_3d bds)
-    : offsets(make_vbo()), surface(vbo, d, background_color, bds),
-      upper_lines(vbo, d, offsets, 0.002f, lt.width, lt.color, bds),
+surface_lines::surface_lines(gl_id vbo, const grid_data_desc &d, const line_type &lt)
+    : offsets(make_vbo()), surface(vbo, d, background_color),
+      upper_lines(vbo, d, offsets, 0.002f, lt.width, lt.color),
       lower_lines(vbo, d, offsets, -0.002f, settings::line_type_by_index(lt.index + 1).width,
-                  settings::line_type_by_index(lt.index + 1).color, bds)
+                  settings::line_type_by_index(lt.index + 1).color)
 {
   normals(vbo, d, offsets);
+}
+
+void update(const surface_lines &s, const transforms_3d &transforms)
+{
+  update(s.surface, transforms);
+  update(s.upper_lines, transforms);
+  update(s.lower_lines, transforms);
 }
 
 void draw(const surface_lines &s)
@@ -319,9 +309,9 @@ void draw(const surface_lines &s)
   draw(s.lower_lines);
 }
 
-pm3d_surface::pm3d_surface(gl_id vbo, const grid_data_desc &d, const uniform_bindings_3d &bds)
-    : vao(make_vao()), program(d.point_size == 4 ? program_for_pm3d_explicit_color(bds)
-                                                 : program_for_pm3d_implicit_color(bds)),
+pm3d_surface::pm3d_surface(gl_id vbo, const grid_data_desc &d)
+    : vao(make_vao()), program(d.point_size == 4 ? program_for_pm3d_explicit_color()
+                                                 : program_for_pm3d_implicit_color()),
       data(surface_draw_info(d))
 {
   auto bounds = minmax(vbo, d.num_columns * d.num_rows, d.point_size, d.point_size - 1);
@@ -339,6 +329,11 @@ pm3d_surface::pm3d_surface(gl_id vbo, const grid_data_desc &d, const uniform_bin
     glEnableVertexAttribArray(1);
   }
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
+}
+
+void update(const pm3d_surface &s, const transforms_3d &transforms)
+{
+  set_phase_to_clip(s.program, transforms.phase_to_clip);
 }
 
 void draw(const pm3d_surface &s)

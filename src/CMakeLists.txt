@@ -30,6 +30,7 @@ add_executable(explot
   user_definitions.cpp
   prefix_sum.cpp
   surfaces.cpp
+  layout.cpp
 )
 
 include(FetchContent)

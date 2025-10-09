@@ -1053,7 +1053,8 @@ struct settings_parser
       | (LEXY_KEYWORD("timefmt", kw_id) >> dsl::p<parser<settings_id::timefmt>>)
       | (LEXY_KEYWORD("hidden3d", kw_id) >> dsl::p<parser<settings_id::hidden3d>>)
       | (LEXY_KEYWORD("palette", kw_id) >> (LEXY_KEYWORD("rgbformulae", kw_id)
-                                            >> dsl::p<parser<settings_id::pallette_rgbformulae>>));
+                                            >> dsl::p<parser<settings_id::pallette_rgbformulae>>))
+      | (LEXY_KEYWORD("multiplot", kw_id) >> dsl::p<parser<settings_id::multiplot>>);
   static constexpr auto value = lexy::construct<enum_sum_t<settings_id, vv, all_settings>>;
 };
 
@@ -1153,6 +1154,14 @@ struct set
   {
     static constexpr auto rule = dsl::times<3>(dsl::p<signed_integer>, dsl::sep(dsl::comma));
     static constexpr auto value = lexy::construct<std::tuple<int, int, int>>;
+  };
+
+  template <>
+  struct value_parser<multiplot_setting>
+  {
+    static constexpr auto rule = LEXY_KEYWORD("layout", kw_id)
+                                 >> dsl::twice(dsl::p<decimal_integer>, dsl::sep(dsl::comma));
+    static constexpr auto value = lexy::construct<multiplot_setting>;
   };
 
   template <settings_id id>

@@ -11,4 +11,8 @@ impulses_state::impulses_state(gl_id vbo, const seq_data_desc &d, float width,
 {
 }
 
+void update(const impulses_state &s, const transforms_2d &transforms)
+{
+  update(s.lines, transforms);
+}
 } // namespace explot

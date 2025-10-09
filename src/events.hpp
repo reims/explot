@@ -23,5 +23,11 @@ struct drag
 rx::observable<rx::observable<drag>> drags();
 rx::observable<drag> drops();
 
-rect drag_to_rect(const drag &d, float width);
+rx::observable<rx::observable<drag>> drags(const rect &screen);
+rx::observable<drag> drops(const rect &screen);
+
+rx::observable<rx::observable<drag>> drags(rx::observable<rect> screen, const rect &part);
+
+rect drag_to_rect(const drag &d, float height);
+rect drag_to_rect(const drag &d);
 } // namespace explot

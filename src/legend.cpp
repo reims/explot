@@ -54,18 +54,14 @@ seq_data_desc make_line_data(gl_id vbo)
   return data_for_span(vbo, coords, 2);
 }
 
-static constexpr auto ubo_bindings_start = 16u;
-
 } // namespace
 
 namespace explot
 {
 
 legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value()), ubo(make_vbo())
+    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
-  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-  glBufferData(GL_UNIFORM_BUFFER, graphs.size() * sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
   marks.reserve(graphs.size());
@@ -77,27 +73,22 @@ legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type>
     switch (g.mark)
     {
     case mark_type_2d::points:
-      marks.emplace_back(points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color,
-                                         9.0f, {.phase_to_screen = ubo_bindings_start + i}));
+      marks.emplace_back(
+          points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color, 9.0f));
       break;
     case mark_type_2d::impulses:
     case mark_type_2d::lines:
-      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
-                                        {.phase_to_screen = ubo_bindings_start + i}));
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color));
       break;
     }
-    glBindBufferRange(GL_UNIFORM_BUFFER, ubo_bindings_start + i, ubo, i * sizeof(glm::mat4),
-                      sizeof(glm::mat4));
     titles.emplace_back(font, g.title, text_color);
     colors.push_back(graph_colors[(i++) % num_graph_colors]);
   }
 }
 
 legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts)
-    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value()), ubo(make_vbo())
+    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
-  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-  glBufferData(GL_UNIFORM_BUFFER, graphs.size() * sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
   auto i = 0u;
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
@@ -109,27 +100,23 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
     switch (g.mark)
     {
     case mark_type_3d::points:
-      marks.emplace_back(points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color,
-                                         9.0f, {.phase_to_screen = ubo_bindings_start + i}));
+      marks.emplace_back(
+          points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color, 9.0f));
       break;
     case mark_type_3d::lines:
-      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
-                                        {.phase_to_screen = ubo_bindings_start + i}));
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color));
       break;
     case mark_type_3d::surface:
     case explot::mark_type_3d::pm3d:
-      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color,
-                                        {.phase_to_screen = ubo_bindings_start + i}));
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color));
       break;
     }
-    glBindBufferRange(GL_UNIFORM_BUFFER, ubo_bindings_start + i, ubo, i * sizeof(glm::mat4),
-                      sizeof(glm::mat4));
     titles.emplace_back(font, g.title, text_color);
     colors.push_back(lts[i++].color);
   }
 }
 
-void update(const legend &l, const rect &screen)
+void update(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip)
 {
   const auto text_width = std::ranges::max(std::views::transform(
       l.titles, [](const gl_string &s) { return s.upper_bounds.x - s.lower_bounds.x; }));
@@ -137,7 +124,6 @@ void update(const legend &l, const rect &screen)
       l.titles, [](const gl_string &s) { return s.upper_bounds.y - s.lower_bounds.y; }));
   const auto start_of_mark = screen.upper_bounds.x - text_width - 30.f;
   assert(l.titles.size() == l.marks.size());
-  auto mats = std::make_unique<glm::mat4[]>(l.marks.size());
   for (auto i = 0u; i < l.titles.size(); ++i)
   {
     const auto &s = l.titles[i];
@@ -145,12 +131,11 @@ void update(const legend &l, const rect &screen)
         .lower_bounds = {start_of_mark, screen.upper_bounds.y - (i + 1) * text_height - 10, -1.0f},
         .upper_bounds = {start_of_mark + 20.0f, screen.upper_bounds.y - i * text_height - 10,
                          1.0f}};
-    mats[i] = transform(clip_rect, screen_rect);
-    update(s, {start_of_mark + 20, screen_rect.upper_bounds.y, 0}, {0.0f, 1.0f});
+    auto mark_transforms = transforms_2d{.phase_to_screen = transform(clip_rect, screen_rect),
+                                         .screen_to_clip = screen_to_clip};
+    std::visit([&](const auto &m) { update(m, mark_transforms); }, l.marks[i]);
+    update(s, {start_of_mark + 20, screen_rect.upper_bounds.y, 0}, {0.0f, 1.0f}, screen_to_clip);
   }
-
-  glBindBuffer(GL_UNIFORM_BUFFER, l.ubo);
-  glBufferSubData(GL_UNIFORM_BUFFER, 0, l.marks.size() * sizeof(glm::mat4), mats.get());
 }
 
 void draw(const legend &l)

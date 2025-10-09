@@ -9,5 +9,7 @@ struct impulses_state
   explicit impulses_state(gl_id vbo, const seq_data_desc &d, float width, const glm::vec4 &color);
   lines_state_2d lines;
 };
+
+void update(const impulses_state &s, const transforms_2d &transforms);
 void draw(const impulses_state &s);
 } // namespace explot

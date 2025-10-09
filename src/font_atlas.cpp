@@ -25,10 +25,7 @@ out vec2 uv;
 
 uniform vec3 offset;
 
-layout(binding = 1) uniform GeometryTransforms
-{
-  mat4 screen_to_clip;
-};
+uniform mat4 screen_to_clip;
 
 
 void main()
@@ -150,7 +147,6 @@ for (auto j = 0u; j < dimy; ++j)
 
 namespace explot
 {
-using std::make_shared;
 
 std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
 {
@@ -333,13 +329,16 @@ void draw(const gl_string &str)
   glDrawArraysInstanced(GL_TRIANGLES, 0, num_points, str.size);
 }
 
-void update(const gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor)
+void update(const gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor,
+            const glm::mat4 &screen_to_clip)
 {
   const auto offset2 = glm::vec2(offset.x, offset.y);
   const auto offset_with_anchor = glm::vec3(
       glm::floor(offset2 - anchor * str.upper_bounds - (1.0f - anchor) * str.lower_bounds),
       offset.z);
   glUseProgram(str.program);
+  glUniformMatrix4fv(glGetUniformLocation(str.program, "screen_to_clip"), 1, GL_FALSE,
+                     glm::value_ptr(screen_to_clip));
   glUniform3fv(glGetUniformLocation(str.program, "offset"), 1, glm::value_ptr(offset_with_anchor));
 }
 

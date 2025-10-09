@@ -57,6 +57,22 @@ glm::mat4 transform(const rect &from, const rect &to)
   return glm::translate(glm::mat4(1.0f), v) * glm::scale(glm::mat4(1.0f), s);
 }
 
+rect part_of(const rect &whole, const rect &relative)
+{
+  auto complement_upper = glm::vec3(1.0f, 1.0f, 1.0f) - relative.upper_bounds;
+  auto complement_lower = glm::vec3(1.0f, 1.0f, 1.0f) - relative.lower_bounds;
+  return {.lower_bounds =
+              complement_lower * whole.lower_bounds + relative.lower_bounds * whole.upper_bounds,
+          .upper_bounds =
+              complement_upper * whole.lower_bounds + relative.upper_bounds * whole.upper_bounds};
+}
+
+bool contains(const rect &r, const glm::vec2 &p)
+{
+  return r.lower_bounds.x <= p.x && r.upper_bounds.x >= p.x && r.lower_bounds.y < p.y
+         && r.upper_bounds.y >= p.y;
+}
+
 rect scale2d(const rect &r, float s)
 {
   auto mid = (r.lower_bounds + r.upper_bounds) / 2.0f;

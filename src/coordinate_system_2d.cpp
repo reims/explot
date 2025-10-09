@@ -16,15 +16,12 @@ namespace
 using namespace explot;
 auto data_for_axes(glm::vec3 min, glm::vec3 max)
 {
-  auto data = std::array<float, 12>{min.x, min.y, max.x, min.y, min.x, min.y, min.x, max.y};
+  auto data = std::array<float, 8>{min.x, min.y, max.x, min.y, min.x, min.y, min.x, max.y};
   return data;
 }
 
 constexpr auto ticks_vertex_shader_src = R"shader(#version 430 core
-uniform PhaseToScreen
-{
-  mat4 phase_to_screen;
-};
+uniform mat4 phase_to_screen;
 
 uniform vec2 axis_dir;
 uniform vec2 start;
@@ -41,10 +38,7 @@ constexpr auto ticks_geometry_shader_src = R"shader(#version 430 core
 layout (points) in;
 layout (triangle_strip, max_vertices = 6) out;
 
-uniform ScreenToClip
-{
-  mat4 screen_to_clip;
-};
+uniform mat4 screen_to_clip;
 
 uniform float tick_size;
 uniform float width;
@@ -109,17 +103,7 @@ void main()
 
 auto make_program_for_ticks()
 {
-  auto program =
-      make_program(ticks_geometry_shader_src, ticks_vertex_shader_src, fragment_shader_src);
-
-  const auto bds = uniform_bindings_2d{};
-
-  auto idx = glGetUniformBlockIndex(program, "ScreenToClip");
-  glUniformBlockBinding(program, idx, bds.screen_to_clip);
-  auto idx2 = glGetUniformBlockIndex(program, "PhaseToScreen");
-  glUniformBlockBinding(program, idx2, bds.phase_to_screen);
-
-  return program;
+  return make_program(ticks_geometry_shader_src, ticks_vertex_shader_src, fragment_shader_src);
 }
 
 lines_state_2d make_axis(gl_id vbo, const tics_desc &tics)
@@ -168,7 +152,7 @@ coordinate_system_2d::coordinate_system_2d(const tics_desc &tics, uint32_t num_t
   set_uniforms(program_for_ticks, common_ufs);
 }
 
-void update(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen)
+void update(const coordinate_system_2d &cs, const transforms_2d &t)
 {
   const auto steps = (cs.bounding_rect.upper_bounds - cs.bounding_rect.lower_bounds)
                      / static_cast<float>(cs.num_ticks - 1);
@@ -176,17 +160,23 @@ void update(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen)
   {
     const auto p_x =
         cs.bounding_rect.lower_bounds + glm::vec3(static_cast<float>(i) * steps.x, 0.0f, 0.0f);
-    auto o_x = view_to_screen * glm::vec4(p_x, 1.0f);
+    auto o_x = t.phase_to_screen * glm::vec4(p_x, 1.0f);
     o_x.y += -2.0f * cs.tick_size - 1.0f;
     o_x = glm::floor(o_x);
-    update(cs.x_labels[i], o_x, {0.5f, 1.0f});
+    update(cs.x_labels[i], o_x, {0.5f, 1.0f}, t.screen_to_clip);
     const auto p_y =
         cs.bounding_rect.lower_bounds + glm::vec3(0.0f, static_cast<float>(i) * steps.y, 0.0f);
-    auto o_y = view_to_screen * glm::vec4(p_y, 1.0f);
+    auto o_y = t.phase_to_screen * glm::vec4(p_y, 1.0f);
     o_y.x += -2.0f * cs.tick_size - 1.0f;
     o_y = glm ::floor(o_y);
-    update(cs.y_labels[i], o_y, {1.0f, 0.5f});
+    update(cs.y_labels[i], o_y, {1.0f, 0.5f}, t.screen_to_clip);
   }
+  update(cs.axis, t);
+  glUseProgram(cs.program_for_ticks);
+  glUniformMatrix4fv(glGetUniformLocation(cs.program_for_ticks, "phase_to_screen"), 1, GL_FALSE,
+                     glm::value_ptr(t.phase_to_screen));
+  glUniformMatrix4fv(glGetUniformLocation(cs.program_for_ticks, "screen_to_clip"), 1, GL_FALSE,
+                     glm::value_ptr(t.screen_to_clip));
 }
 
 void draw(const coordinate_system_2d &cs)

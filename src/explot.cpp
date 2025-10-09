@@ -9,13 +9,13 @@
 #include "events.hpp"
 #include "settings.hpp"
 #include <thread>
-#include "rx-renderers.hpp"
 #include <atomic>
 #include <semaphore>
 #include <cstdlib>
 #include <filesystem>
 #include "colors.hpp"
 #include "user_definitions.hpp"
+#include "layout.hpp"
 
 namespace
 {
@@ -85,26 +85,24 @@ static constexpr auto uimain = [](auto commands)
   auto plot_commands = commands | rx::filter(is_plot_command)
                        | rx::transform([](const command &cmd) { return as_plot_command(cmd); });
 
-  auto plot = plot_renderer(on_run_loop, frames, screen_space, plot_commands);
-
   auto splot_commands =
       commands
       | rx::filter([](const command &cmd) { return std::holds_alternative<plot_command_3d>(cmd); })
       | rx::transform([](const command &cmd) { return std::get<plot_command_3d>(cmd); });
 
-  auto splot = splot_renderer(on_run_loop, frames, screen_space, splot_commands);
-
-  auto plot_renderers = splot.as_dynamic().merge(plot) | rx::switch_on_next();
-  renderers.push_back(plot_renderers);
-
   rx::composite_subscription lifetime;
-  rx::iterate(renderers) | rx::merge() | rx::subscribe<unit>(lifetime, [](unit) {});
+  layout l;
 
   auto q_presses =
       key_presses() | rx::filter([](int key) { return key == GLFW_KEY_Q; }) | to_unit();
   commands | rx::filter(is_quit_command) | to_unit() | rx::merge(q_presses)
       | rx::observe_on(on_run_loop)
       | rx::subscribe<unit>(lifetime, [=](unit) { glfwSetWindowShouldClose(window, GL_TRUE); });
+
+  plot_commands.subscribe(lifetime, [&](const plot_command_2d &cmd)
+                          { add_plot(l, cmd, frames, screen_space, on_run_loop); });
+  splot_commands.subscribe(lifetime, [&](const plot_command_3d &cmd)
+                           { add_plot(l, cmd, frames, screen_space, on_run_loop); });
 
   ready_for_cmds.release();
 
@@ -117,7 +115,7 @@ static constexpr auto uimain = [](auto commands)
 
     int width = 0, height = 0;
     glfwGetFramebufferSize(window, &width, &height);
-    glViewport(0, 0, width, height);
+    // glViewport(0, 0, width, height);
     screen_space_out.on_next(rect{.lower_bounds = {0, 0, -1}, .upper_bounds = {width, height, 1}});
 
     frames_out.on_next(unit{});

@@ -34,4 +34,19 @@ struct uniform_bindings_3d
   uint32_t clip_to_screen = 2;
 };
 
+struct transforms_2d
+{
+  glm::mat4 phase_to_screen;
+  glm::mat4 screen_to_clip;
+};
+
+struct transforms_3d
+{
+  glm::mat4 phase_to_clip;
+  glm::mat4 screen_to_clip;
+  glm::mat4 clip_to_screen;
+};
+
+void set_transforms(gl_id program, const transforms_2d &transforms);
+void set_transforms(gl_id program, const transforms_3d &transforms);
 } // namespace explot

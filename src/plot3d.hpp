@@ -17,7 +17,6 @@ struct plot3d final
   tics_desc phase_space;
   coordinate_system_3d cs;
   legend legend;
-  vbo_handle ubo;
 
 private:
   plot3d(const plot_command_3d &cmd, std::span<const line_type> lts);

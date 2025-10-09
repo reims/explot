@@ -18,10 +18,9 @@ struct graph2d final
   vbo_handle vbo;
   state graph;
   line_type lt;
-  graph2d() = default;
   graph2d(vbo_handle vbo, const seq_data_desc &data, mark_type_2d mark, line_type line_type);
 };
 
-void update(const graph2d &graph);
+void update(const graph2d &graph, const transforms_2d &transforms);
 void draw(const graph2d &graph);
 } // namespace explot

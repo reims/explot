@@ -25,6 +25,6 @@ struct coordinate_system_2d final
   font_atlas atlas;
 };
 
-void update(const coordinate_system_2d &cs, const glm::mat4 &view_to_screen);
+void update(const coordinate_system_2d &cs, const transforms_2d &transforms);
 void draw(const coordinate_system_2d &coordinate_system);
 } // namespace explot

@@ -2,7 +2,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <vector>
 #include <string>
-#include <fmt/format.h>
 #include "colors.hpp"
 #include "font_atlas.hpp"
 #include "gl-handle.hpp"
@@ -39,9 +38,8 @@ namespace explot
 {
 coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t num_ticks)
     : scale_to_phase(transform(clip_rect, tics.bounding_rect)), vbo(make_vbo()),
-      lines(vbo, data_for_coordinate_system(vbo, num_ticks), 1.0f, axis_color,
-            {.phase_to_clip = 6}),
-      font(make_font_atlas("+-.,0123456789eE", 10).value()), ubo(make_vbo())
+      lines(vbo, data_for_coordinate_system(vbo, num_ticks), 1.0f, axis_color),
+      font(make_font_atlas("+-.,0123456789eE", 10).value())
 {
   const auto &br = tics.bounding_rect;
   const auto steps = (br.upper_bounds - br.lower_bounds) / static_cast<float>(num_ticks - 1);
@@ -56,46 +54,43 @@ coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t 
     ylabels.emplace_back(font, format_for_tic(p.y, tics.least_significant_digit_y), text_color);
     zlabels.emplace_back(font, format_for_tic(p.z, tics.least_significant_digit_z), text_color);
   }
-
-  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-  glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
-  glBindBufferBase(GL_UNIFORM_BUFFER, 6, ubo);
 }
 
-void update(const coordinate_system_3d &cs, const glm::mat4 &phase_to_clip,
-            const glm::mat4 &clip_to_screen, const glm::mat4 &)
+void update(const coordinate_system_3d &cs, const transforms_3d &t)
 {
   const auto num_ticks = cs.xlabels.size();
   const auto step = 2.0f / static_cast<float>(num_ticks - 1);
   const auto radius = 0.04f;
   for (auto i = 0u; i < num_ticks; ++i)
   {
-    auto offset = phase_to_clip * cs.scale_to_phase
+    auto offset = t.phase_to_clip * cs.scale_to_phase
                   * glm::vec4(-1.0f + static_cast<float>(i) * step, -1.0f - radius, -1.0f, 1.0f);
     offset /= offset.w;
-    offset = clip_to_screen * offset;
-    update(cs.xlabels[i], offset, {0.5f, 1.0f});
+    offset = t.clip_to_screen * offset;
+    update(cs.xlabels[i], offset, {0.5f, 1.0f}, t.screen_to_clip);
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
-    auto offset = phase_to_clip * cs.scale_to_phase
+    auto offset = t.phase_to_clip * cs.scale_to_phase
                   * glm::vec4(-1.0f, -1.0f + static_cast<float>(i) * step, -1.0f - radius, 1.0f);
     offset /= offset.w;
-    offset = clip_to_screen * offset;
-    update(cs.ylabels[i], offset, {0.5f, 1.0f});
+    offset = t.clip_to_screen * offset;
+    update(cs.ylabels[i], offset, {0.5f, 1.0f}, t.screen_to_clip);
   }
   for (auto i = 0u; i < num_ticks; ++i)
   {
-    auto offset = phase_to_clip * cs.scale_to_phase
+    auto offset = t.phase_to_clip * cs.scale_to_phase
                   * glm::vec4(-1.0f - radius, -1.0f, -1.0f + static_cast<float>(i) * step, 1.0f);
     offset /= offset.w;
-    offset = clip_to_screen * offset;
-    update(cs.zlabels[i], offset, {1.0f, 0.5f});
+    offset = t.clip_to_screen * offset;
+    update(cs.zlabels[i], offset, {1.0f, 0.5f}, t.screen_to_clip);
   }
 
-  auto axis_phase_to_clip = phase_to_clip * cs.scale_to_phase;
-  glBindBuffer(GL_UNIFORM_BUFFER, cs.ubo);
-  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(axis_phase_to_clip));
+  auto axis_phase_to_clip = t.phase_to_clip * cs.scale_to_phase;
+  auto axis_transforms = transforms_3d{.phase_to_clip = axis_phase_to_clip,
+                                       .screen_to_clip = t.screen_to_clip,
+                                       .clip_to_screen = t.clip_to_screen};
+  update(cs.lines, axis_transforms);
 }
 
 void draw(const coordinate_system_3d &cs)

@@ -117,4 +117,24 @@ void set_uniforms(gl_id program, std::span<const uniform> uniforms)
   }
 }
 
+void set_transforms(gl_id program, const transforms_2d &transforms)
+{
+  glUseProgram(program);
+  glUniformMatrix4fv(glGetUniformLocation(program, "phase_to_screen"), 1, GL_FALSE,
+                     glm::value_ptr(transforms.phase_to_screen));
+  glUniformMatrix4fv(glGetUniformLocation(program, "screen_to_clip"), 1, GL_FALSE,
+                     glm::value_ptr(transforms.screen_to_clip));
+}
+
+void set_transforms(gl_id program, const transforms_3d &transforms)
+{
+  glUseProgram(program);
+  glUniformMatrix4fv(glGetUniformLocation(program, "phase_to_clip"), 1, GL_FALSE,
+                     glm::value_ptr(transforms.phase_to_clip));
+  glUniformMatrix4fv(glGetUniformLocation(program, "clip_to_screen"), 1, GL_FALSE,
+                     glm::value_ptr(transforms.clip_to_screen));
+  glUniformMatrix4fv(glGetUniformLocation(program, "screen_to_clip"), 1, GL_FALSE,
+                     glm::value_ptr(transforms.screen_to_clip));
+}
+
 } // namespace explot

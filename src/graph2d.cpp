@@ -30,11 +30,12 @@ graph2d::graph2d(vbo_handle vbo, const seq_data_desc &d, mark_type_2d mark, line
 {
 }
 
-void update(const graph2d &graph)
+void update(const graph2d &graph, const transforms_2d &transforms)
 {
-  std::visit(overload([&](const points_2d_state &) {}, [&](const line_strip_state_2d &) {},
-                      [&](const dashed_line_strip_state_2d &s) { update(s); },
-                      [&](const impulses_state &) {}),
+  std::visit(overload([&](const points_2d_state &s) { update(s, transforms); },
+                      [&](const line_strip_state_2d &s) { update(s, transforms); },
+                      [&](const dashed_line_strip_state_2d &s) { update(s, transforms); },
+                      [&](const impulses_state &s) { update(s, transforms); }),
              graph.graph);
 }
 

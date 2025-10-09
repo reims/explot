@@ -21,5 +21,6 @@ struct graph3d final
   line_type lt;
 };
 
+void update(const graph3d &graph, const transforms_3d transforms);
 void draw(const graph3d &graph);
 } // namespace explot

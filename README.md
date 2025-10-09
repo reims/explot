@@ -41,6 +41,9 @@ dependencies.
 ### Pm3d example
 ![`splot "matrix.csv" matrix with pm3d`](./img/pm3d.png)
 
+### Multiplot example
+![](./img/multiplot.png)
+
 ## Features
 
 ### Gnuplot featues
@@ -49,10 +52,12 @@ dependencies.
 - [x] Plotting text datafiles, as columns and as a matrix
 - [x] Plotting functions and parametric curves/surfaces
 - [x] Datetime handling
-- [x] user-defined functions and variables
-- [ ] load files
-- [ ] piped data
-- [ ] binary data
+- [x] User-defined functions and variables
+- [x] Multiplot Only simple layouts for now. Setting size and position
+  manually for plots is not implemented yet.
+- [ ] Load files
+- [ ] Piped data
+- [ ] Binary data
 - Plotting styles:
   - [x] points
   - [x] lines

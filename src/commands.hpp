@@ -183,6 +183,13 @@ enum class data_type : char
   normal,
   time
 };
+
+struct multiplot_setting
+{
+  uint32_t rows;
+  uint32_t cols;
+};
+
 enum class settings_id
 {
   samples,
@@ -193,14 +200,15 @@ enum class settings_id
   timefmt,
   xdata,
   hidden3d,
-  pallette_rgbformulae
+  pallette_rgbformulae,
+  multiplot
 };
 
 using all_settings =
     enum_sequence<settings_id, settings_id::samples, settings_id::isosamples,
                   settings_id::datafile_separator, settings_id::xrange, settings_id::parametric,
                   settings_id::timefmt, settings_id::xdata, settings_id::hidden3d,
-                  settings_id::pallette_rgbformulae>;
+                  settings_id::pallette_rgbformulae, settings_id::multiplot>;
 
 template <settings_id>
 struct settings_type
@@ -260,6 +268,12 @@ template <>
 struct settings_type<settings_id::pallette_rgbformulae>
 {
   using type = std::tuple<int, int, int>;
+};
+
+template <>
+struct settings_type<settings_id::multiplot>
+{
+  using type = multiplot_setting;
 };
 
 template <settings_id id>

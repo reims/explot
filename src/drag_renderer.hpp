@@ -11,12 +11,11 @@ struct drag_render_state final
 {
   line_strip_state_2d lines;
   vbo_handle vbo;
-  vbo_handle ubo;
 
   drag_render_state();
 
   drag_render_state(std::tuple<vbo_handle, seq_data_desc> &&t);
 };
 
-void draw(const drag_render_state &s, const rect &d);
+void draw(const drag_render_state &s, const rect &d, const rect &screen);
 } // namespace explot

@@ -23,6 +23,7 @@ data_type xdata();
 bool hidden3d();
 
 std::string_view rgbformula(uint32_t idx);
+const multiplot_setting &multiplot();
 
 namespace datafile
 {

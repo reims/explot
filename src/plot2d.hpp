@@ -16,7 +16,6 @@ struct plot2d
   std::vector<graph2d> graphs;
   legend legend;
   time_point timebase;
-  vbo_handle transforms;
   plot2d(const plot_command_2d &cmd, const std::vector<line_type> &lts);
 };
 

@@ -51,14 +51,8 @@ namespace explot
 {
 plot3d::plot3d(const plot_command_3d &cmd, std::span<const line_type> lts)
     : graphs(graphs_for_descs(cmd, lts, data_for_plot(cmd))),
-      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7), legend(cmd.graphs, lts),
-      ubo(make_vbo())
+      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7), legend(cmd.graphs, lts)
 {
-  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-  glBufferData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
-  glBindBufferRange(GL_UNIFORM_BUFFER, 0, ubo, 0, sizeof(glm::mat4));
-  glBindBufferRange(GL_UNIFORM_BUFFER, 1, ubo, sizeof(glm::mat4), sizeof(glm::mat4));
-  glBindBufferRange(GL_UNIFORM_BUFFER, 2, ubo, 2 * sizeof(glm::mat4), sizeof(glm::mat4));
 }
 
 plot3d::plot3d(const plot_command_3d &cmd) : plot3d(cmd, resolve_line_types(cmd.graphs)) {}
@@ -74,13 +68,16 @@ void update(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &v
   const auto pre_translation = glm::translate(glm::identity<glm::mat4>(), view_origin);
   const auto phase_to_view = view_rotation * pre_translation * phase_to_std_view;
 
-  glm::mat4 ufs[] = {view_to_clip * phase_to_view, transform(screen, clip_rect),
-                     transform(clip_rect, screen)};
+  auto transforms = transforms_3d{.phase_to_clip = view_to_clip * phase_to_view,
+                                  .screen_to_clip = transform(screen, clip_rect),
+                                  .clip_to_screen = transform(clip_rect, screen)};
 
-  glBindBuffer(GL_UNIFORM_BUFFER, plot.ubo);
-  glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(ufs), ufs);
-  update(plot.legend, screen);
-  update(plot.cs, ufs[0], ufs[2], ufs[1]);
+  update(plot.legend, screen, transforms.screen_to_clip);
+  update(plot.cs, transforms);
+  for (const auto &g : plot.graphs)
+  {
+    update(g, transforms);
+  }
 }
 
 void draw(const plot3d &plot)

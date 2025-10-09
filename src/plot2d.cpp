@@ -15,7 +15,7 @@ namespace explot
 
 plot2d::plot2d(const plot_command_2d &cmd) : plot2d(cmd, resolve_line_types(cmd.graphs)) {}
 plot2d::plot2d(const plot_command_2d &cmd, const std::vector<line_type> &lts)
-    : legend(cmd.graphs, lts), transforms(make_vbo())
+    : legend(cmd.graphs, lts)
 {
   graphs.reserve(cmd.graphs.size());
   auto [data, tb] = data_for_plot(cmd);
@@ -30,9 +30,6 @@ plot2d::plot2d(const plot_command_2d &cmd, const std::vector<line_type> &lts)
   }
   phase_space = bounding.value_or(clip_rect);
   timebase = tb;
-
-  glBindBufferRange(GL_UNIFORM_BUFFER, 0, transforms, 0, sizeof(glm::mat4));
-  glBindBufferRange(GL_UNIFORM_BUFFER, 1, transforms, sizeof(glm::mat4), sizeof(glm::mat4));
 }
 
 void draw(const plot2d &plot)
@@ -46,13 +43,13 @@ void draw(const plot2d &plot)
 
 void update(const plot2d &plot, const rect &screen, const rect &view)
 {
-  const glm::mat4 matrices[] = {transform(view, screen), transform(screen, clip_rect)};
-  glBindBuffer(GL_UNIFORM_BUFFER, plot.transforms);
-  glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), matrices, GL_DYNAMIC_DRAW);
-  update(plot.legend, screen);
+  transforms_2d transforms = {.phase_to_screen = transform(view, screen),
+                              .screen_to_clip = transform(screen, clip_rect)};
+
+  update(plot.legend, screen, transforms.screen_to_clip);
   for (const auto &g : plot.graphs)
   {
-    update(g);
+    update(g, transforms);
   }
 }
 } // namespace explot

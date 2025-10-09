@@ -67,7 +67,8 @@ struct gl_string final
   glm::vec2 lower_bounds;
   glm::vec2 upper_bounds;
 };
-void update(const gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor = {0.0f, 0.0f});
+void update(const gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor,
+            const glm::mat4 &screen_to_clip);
 void draw(const gl_string &str);
 void draw(const font_atlas &atlas, const glm::mat4 &screen_to_clip, const glm::vec2 &offset);
 } // namespace explot

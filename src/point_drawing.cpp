@@ -10,10 +10,7 @@ using namespace explot;
 constexpr auto vertex_2d_shader_src = R"shader(#version 330 core
 layout (location = 0) in vec2 position;
 
-uniform PhaseToScreen
-{
-  mat4 phase_to_screen;
-};
+uniform mat4 phase_to_screen;
 
 void main()
 {
@@ -24,15 +21,9 @@ void main()
 constexpr auto vertex_3d_shader_src = R"(#version 330 core
 layout (location = 0) in vec3 position;
 
-uniform PhaseToClip
-{
-  mat4 phase_to_clip;
-};
+uniform mat4 phase_to_clip;
 
-uniform ClipToScreen
-{
-  mat4 clip_to_screen;
-};
+uniform mat4 clip_to_screen;
 
 void main()
 {
@@ -49,10 +40,7 @@ layout (triangle_strip, max_vertices = 12) out;
 uniform float width;
 uniform float point_width;
 
-uniform ScreenToClip
-{
-  mat4 screen_to_clip;
-};
+uniform mat4 screen_to_clip;
 
 out float dist;
 
@@ -132,38 +120,16 @@ program_handle make_points_program(const char *vertex_shader_src)
   return make_program(geometry_shader_src, vertex_shader_src, fragment_shader_src);
 }
 
-program_handle make_points_2d_program(const uniform_bindings_2d &bds)
-{
-  auto program = make_points_program(vertex_2d_shader_src);
-  glUseProgram(program);
-  auto phase_to_screen_idx = glGetUniformBlockIndex(program, "PhaseToScreen");
-  glUniformBlockBinding(program, phase_to_screen_idx, bds.phase_to_screen);
-  auto screen_to_clip_idx = glGetUniformBlockIndex(program, "ScreenToClip");
-  glUniformBlockBinding(program, screen_to_clip_idx, bds.screen_to_clip);
-  return program;
-}
+program_handle make_points_2d_program() { return make_points_program(vertex_2d_shader_src); }
 
-program_handle make_points_3d_program(const uniform_bindings_3d &bds)
-{
-  auto program = make_points_program(vertex_3d_shader_src);
-  glUseProgram(program);
-  auto phase_to_clip_idx = glGetUniformBlockIndex(program, "PhaseToClip");
-  glUniformBlockBinding(program, phase_to_clip_idx, bds.phase_to_clip);
-  auto screen_to_clip_idx = glGetUniformBlockIndex(program, "ScreenToClip");
-  glUniformBlockBinding(program, screen_to_clip_idx, bds.screen_to_clip);
-  auto clip_to_screen_idx = glGetUniformBlockIndex(program, "ClipToScreen");
-  glUniformBlockBinding(program, clip_to_screen_idx, bds.clip_to_screen);
-
-  return program;
-}
+program_handle make_points_3d_program() { return make_points_program(vertex_3d_shader_src); }
 } // namespace
 
 namespace explot
 {
 points_2d_state::points_2d_state(gl_id vbo, const seq_data_desc &d, float width,
-                                 const glm::vec4 &color, float point_wdith,
-                                 const uniform_bindings_2d &bds)
-    : vao(make_vao()), program(make_points_2d_program(bds)), data(sequential_draw_info(d))
+                                 const glm::vec4 &color, float point_wdith)
+    : vao(make_vao()), program(make_points_2d_program()), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -171,6 +137,11 @@ points_2d_state::points_2d_state(gl_id vbo, const seq_data_desc &d, float width,
   uniform ufs[] = {{"width", width}, {"color", color}, {"point_width", point_wdith}};
   set_uniforms(program, ufs);
   glEnableVertexAttribArray(0);
+}
+
+void update(const points_2d_state &state, const transforms_2d &transforms)
+{
+  set_transforms(state.program, transforms);
 }
 
 void draw(const points_2d_state &state)
@@ -181,9 +152,8 @@ void draw(const points_2d_state &state)
 }
 
 points_3d_state::points_3d_state(gl_id vbo, const seq_data_desc &d, float width,
-                                 const glm::vec4 &color, float point_width,
-                                 const uniform_bindings_3d &bds)
-    : vao(make_vao()), program(make_points_3d_program(bds)), data(sequential_draw_info(d))
+                                 const glm::vec4 &color, float point_width)
+    : vao(make_vao()), program(make_points_3d_program()), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -194,9 +164,8 @@ points_3d_state::points_3d_state(gl_id vbo, const seq_data_desc &d, float width,
 }
 
 points_3d_state::points_3d_state(gl_id vbo, const grid_data_desc &d, float width,
-                                 const glm::vec4 &color, float point_width,
-                                 const uniform_bindings_3d &bds)
-    : vao(make_vao()), program(make_points_3d_program(bds)), data(sequential_draw_info(d))
+                                 const glm::vec4 &color, float point_width)
+    : vao(make_vao()), program(make_points_3d_program()), data(sequential_draw_info(d))
 {
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -204,6 +173,11 @@ points_3d_state::points_3d_state(gl_id vbo, const grid_data_desc &d, float width
   glEnableVertexAttribArray(0);
   uniform ufs[] = {{"width", width / 2}, {"point_width", point_width / 2}, {"color", color}};
   set_uniforms(program, ufs);
+}
+
+void update(const points_3d_state &state, const transforms_3d &transforms)
+{
+  set_transforms(state.program, transforms);
 }
 
 void draw(const points_3d_state &state)
