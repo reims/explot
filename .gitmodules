@@ -1,5 +1,5 @@
 [submodule "RxCpp"]
 	path = RxCpp
-	url = https://github.com/ReactiveX/RxCpp.git
-	branch = main
+	url = https://github.com/HOMODELUNA/RxCpp.git
+	branch = fix-assigning-to-const-pointer
 	
