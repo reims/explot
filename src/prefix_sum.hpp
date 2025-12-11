@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gl-handle.hpp"
+#include <cstdint>
 
 namespace explot
 {

@@ -12,15 +12,15 @@ graph2d::graph2d(vbo_handle vbo, const seq_data_desc &d, mark_type_2d mark, line
                                  case mark_type_2d::points:
                                    return points_2d_state(this->vbo, d, lt.width, lt.color, 9);
                                  case mark_type_2d::lines:
-                                   if (lt.dash_type)
-                                   {
-                                     return dashed_line_strip_state_2d(
-                                         this->vbo, d, lt.dash_type->segments, lt.width, lt.color);
-                                   }
-                                   else
-                                   {
+                                   //if (lt.dash_type)
+                                   //{
+                                   //  return dashed_line_strip_state_2d(
+                                   //      this->vbo, d, lt.dash_type->segments, lt.width, lt.color);
+                                   //}
+                                   //else
+                                   //{
                                      return line_strip_state_2d(this->vbo, d, lt.width, lt.color);
-                                   }
+                                   //}
                                  case mark_type_2d::impulses:
                                    return impulses_state(this->vbo, d, lt.width, lt.color);
                                  }

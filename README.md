@@ -14,18 +14,29 @@ Start `explot` in a terminal and start plotting.
 
 ## Build
 
-`explot` uses cmake as the build system and nix for dependency
-management. Use `nix develop --impure` to enter a development
-shell. Within this shell you can use cmake to build `explot` as
-usual. `--impure` is needed because OpenGL depends on the
-hardware. Unfortunately, that also means that `explot` must be started
-via `nixGL explot` from the development shell, unless you are using
-NixOS (I use Arch btw).
+`explot` uses cmake as the build system and nix or vcpkg for dependency
+management. 
+
+### Linux
+
+Use `nix develop --impure` to enter a development shell. Within this
+shell you can use cmake to build `explot` as usual. `--impure` is
+needed because OpenGL depends on the hardware. Unfortunately, that
+also means that `explot` must be started via `nixGL explot` from the
+development shell, unless you are using NixOS (I use Arch btw).
 
 If you want to build `explot` without nix, you must make sure that
 cmake can find all the dependencies. See `flake.nix` for a list of
 dependencies.
 
+### Windows
+
+Under Windows, `explot` uses vcpkg for dependencies and the LLVM
+toolchain for building. With Visual Studio you will need cmake
+support, clang and vcpkg integration installed. You might also need to
+point cmake to the vcpkg root like described here
+https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration.
+Then `explot` should build and run as usually.
 
 ## Screenshots
 

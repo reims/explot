@@ -6,3 +6,6 @@ build
 compile_commands.json
 .cache
 .direnv
+vcpkg_installed
+CMakeUserPresets.json
+.vs

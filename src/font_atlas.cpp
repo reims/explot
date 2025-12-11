@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <fontconfig/fontconfig.h>
 #include "program.hpp"
+#include <array>
 
 namespace
 {

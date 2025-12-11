@@ -12,6 +12,7 @@
 #include <ranges>
 #include "colors.hpp"
 #include "settings.hpp"
+#include <numbers>
 
 namespace
 {
@@ -487,8 +488,9 @@ struct line_type
     static constexpr auto rule =
         dsl::quoted(dsl::lit_c<'.'> / dsl::lit_c<'-'> / dsl::lit_c<'_'> / dsl::lit_c<' '>);
 
-    static constexpr auto value =
-        lexy::fold_inplace<dash_type>(dash_type{},
+    static constexpr auto value = lexy::fold_inplace<dash_type>([]()
+        { return dash_type{};
+        },
                                       [](dash_type &result, const lexeme &l)
                                       {
                                         for (auto c : l)
@@ -512,7 +514,7 @@ struct line_type
                                             break;
                                           }
                                         }
-                                      });
+      });
   };
 
   struct dash_type_numerical
@@ -1221,7 +1223,7 @@ namespace explot
 {
 std::optional<ast::command> parse_command_ast(std::string_view line)
 {
-  auto input = lexy::string_input<lexy::utf8_char_encoding>(line.begin(), line.end());
+  auto input = lexy::string_input<lexy::utf8_char_encoding>(line.data(), line.data() + line.size());
   if (settings::parametric())
   {
     auto result = lexy::parse<r::parametric_command_ast>(input, lexy_ext::report_error);

@@ -3,7 +3,12 @@
 #include "rx.hpp"
 #include <GLFW/glfw3.h>
 #include <vector>
+#ifdef WIN32
+#include <readline/readline.h>
+#include <readline/history.h>
+#else
 #include <linenoise.h>
+#endif
 #include <fmt/format.h>
 #include "parse_commands.hpp"
 #include "events.hpp"
@@ -145,12 +150,52 @@ std::filesystem::path get_data_dir()
     const auto home = std::getenv("HOME");
     if (home == nullptr)
     {
-      fmt::println("$HOME and $XDG_DATA_HOME not set");
+      fmt::println("$HOME and $XDG_DATA_HOME not set. Using working directory instead.");
       return std::filesystem::current_path();
     }
     return std::filesystem::path(home) / ".local" / "share" / "explot";
   }
   return std::filesystem::path(data_dir_ptr) / "explot";
+}
+
+char *readnextline(const char *prompt)
+{
+#ifdef WIN32
+  return readline(prompt);
+#else
+  return linenoise(prompt);
+#endif
+}
+
+void setup_history(const std::filesystem::path &history_path)
+{
+#ifdef WIN32
+  using_history();
+  auto path = history_path.string();
+  read_history(path.c_str());
+#else
+  linenoiseHistorySetMaxLen(100);
+  linenoiseHistoryLoad(history_path.c_str());
+#endif
+}
+
+void add_to_history(const char *line)
+{
+#ifdef WIN32
+  add_history(line);
+#else
+  linenoiseHistoryAdd(line);
+#endif
+}
+
+void save_history(const std::filesystem::path &history_path)
+{
+#ifdef WIN32
+  auto path = history_path.string();
+  write_history(path.c_str());
+#else
+  linenoiseHistorySave(history_path.c_str());
+#endif
 }
 
 } // namespace
@@ -161,19 +206,15 @@ int main()
   auto cmd_subscriber = cmd_subject.get_subscriber();
 
   const auto data_dir = get_data_dir();
-
-  std::filesystem::create_directories(data_dir);
   const auto history_path = data_dir / "history";
-
-  linenoiseHistorySetMaxLen(100);
-  linenoiseHistoryLoad(history_path.c_str());
-
+  std::filesystem::create_directories(data_dir);
+  setup_history(history_path);
   auto uithread = std::optional<std::jthread>();
 
-  for (auto line_ptr = std::unique_ptr<char>(linenoise("> ")); line_ptr != nullptr;
-       line_ptr.reset(linenoise("> ")))
+  for (auto line_ptr = std::unique_ptr<char>(readnextline("> ")); line_ptr != nullptr;
+       line_ptr.reset(readnextline("> ")))
   {
-    linenoiseHistoryAdd(line_ptr.get());
+    add_to_history(line_ptr.get());
     auto cmd = explot::parse_command(line_ptr.get());
     if (cmd.has_value())
     {
@@ -216,8 +257,6 @@ int main()
       fmt::println("error: {}", cmd.error());
     }
   }
-
-  linenoiseHistorySave(history_path.c_str());
-
+  save_history(history_path);
   return 0;
 }

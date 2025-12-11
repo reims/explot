@@ -1,0 +1,12 @@
+{
+  "dependencies": [
+    "fmt",
+    "fontconfig",
+    "freetype",
+    "glew",
+    "glfw3",
+    "glm",
+    "readline",
+    "date"
+  ]
+}

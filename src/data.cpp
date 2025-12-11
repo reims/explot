@@ -1,7 +1,6 @@
 #include "data.hpp"
 #include "commands.hpp"
 #include "gl-handle.hpp"
-#include <bits/ranges_algo.h>
 #include <cstdint>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
@@ -211,7 +210,7 @@ void main()
 }}}}
 )";
 
-  auto shader_src = fmt::format(shader_source_fmt, std::max(1UL, indices.size()));
+  auto shader_src = fmt::format(shader_source_fmt, std::max(size_t(1), indices.size()));
   return program_for_expressions(shader_src.c_str(), exprs, indices);
 }
 

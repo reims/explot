@@ -33,6 +33,9 @@ add_executable(explot
   layout.cpp
 )
 
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+  cmake_policy(SET CMP0135 NEW)
+endif()
 include(FetchContent)
 FetchContent_Declare(lexy URL https://lexy.foonathan.net/download/lexy-src.zip)
 FetchContent_MakeAvailable(lexy)
@@ -47,7 +50,7 @@ target_include_directories(explot PRIVATE ../RxCpp/Rx/v2/src)
 set(OpenGL_GL_PREFERENCE GLVND)
 
 find_package(fmt REQUIRED)
-target_link_libraries(explot PRIVATE fmt)
+target_link_libraries(explot PRIVATE fmt::fmt-header-only)
 
 find_package(Freetype REQUIRED)
 target_link_libraries(explot PRIVATE Freetype::Freetype)
@@ -61,7 +64,12 @@ target_link_libraries(explot PRIVATE GLEW::GLEW)
 find_package(glfw3 3.3 REQUIRED)
 target_link_libraries(explot PRIVATE glfw)
 
-target_link_libraries(explot PRIVATE linenoise)
+if (WIN32)
+    find_package(unofficial-readline-win32 CONFIG REQUIRED)
+    target_link_libraries(explot PRIVATE unofficial::readline-win32::readline)
+else()
+    target_link_libraries(explot PRIVATE linenoise)
+endif()
 
 find_package(glm REQUIRED)
 #target_link_libraries(explot PRIVATE glm)
@@ -69,6 +77,8 @@ find_package(glm REQUIRED)
 find_package(Fontconfig REQUIRED)
 target_link_libraries(explot PRIVATE Fontconfig::Fontconfig)
 
-target_compile_options(explot  PUBLIC)
-
-target_compile_options(explot PRIVATE -Og -Wpedantic -Werror -Wextra -Wall -Wconversion -Wno-deprecated-declarations -Wno-unused-command-line-argument -stdlib=libc++ -glldb -O1)
+if (WIN32)
+target_compile_options(explot PRIVATE -Og -Wpedantic -Wextra -Wconversion -Wno-deprecated-declarations -Werror -O1)
+else()
+target_compile_options(explot PRIVATE -Og -Wpedantic -Werror -Wextra -Wall -Wconversion -Wno-deprecated-declarations -glldb -O1)
+endif()

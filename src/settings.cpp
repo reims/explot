@@ -28,6 +28,7 @@ std::string to_string_(const data_type &d)
   case data_type::time:
     return "time";
   }
+  return "";
 }
 
 template <>
@@ -62,10 +63,15 @@ std::string to_string_(const multiplot_setting &m)
 {
   return fmt::format("layout {}, {}", m.rows, m.cols);
 }
-
-static constexpr line_type line_types[] = {{1.f, from_rgb(0xa3be8c), std::nullopt, 1},
-                                           {1.f, from_rgb(0xebcb8b), std::nullopt, 2},
-                                           {1.f, from_rgb(0xd08770), std::nullopt, 3}};
+struct predef_line_type
+{
+  float width;
+  glm::vec4 color;
+  uint32_t index;
+};
+static constexpr predef_line_type line_types[] = {{1.f, from_rgb(0xa3be8c), 1},
+                                           {1.f, from_rgb(0xebcb8b), 2},
+                                           {1.f, from_rgb(0xd08770), 3}};
 static constexpr auto num_line_types = std::size(line_types);
 
 template <settings_id id>
@@ -182,10 +188,11 @@ samples_setting isosamples() { return place<settings_id::isosamples>; }
 bool parametric() { return place<settings_id::parametric>; }
 const char *timefmt() { return place<settings_id::timefmt>.c_str(); }
 data_type xdata() { return place<settings_id::xdata>; }
-const line_type &line_type_by_index(uint32_t idx)
+line_type line_type_by_index(uint32_t idx)
 {
   assert(idx > 0);
-  return line_types[(idx - 1) % num_line_types];
+  auto& predef = line_types[(idx - 1) % num_line_types];
+  return {.width = predef.width, .color = predef.color, .dash_type = std::nullopt, .index = predef.index};
 }
 bool hidden3d() { return place<settings_id::hidden3d>; }
 

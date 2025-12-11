@@ -9,7 +9,7 @@
 #include "program.hpp"
 #include "rect.hpp"
 #include "settings.hpp"
-
+#include <array>
 namespace
 {
 
