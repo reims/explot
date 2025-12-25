@@ -488,9 +488,8 @@ struct line_type
     static constexpr auto rule =
         dsl::quoted(dsl::lit_c<'.'> / dsl::lit_c<'-'> / dsl::lit_c<'_'> / dsl::lit_c<' '>);
 
-    static constexpr auto value = lexy::fold_inplace<dash_type>([]()
-        { return dash_type{};
-        },
+    static constexpr auto value =
+        lexy::fold_inplace<dash_type>([]() { return dash_type{}; },
                                       [](dash_type &result, const lexeme &l)
                                       {
                                         for (auto c : l)
@@ -514,7 +513,7 @@ struct line_type
                                             break;
                                           }
                                         }
-      });
+                                      });
   };
 
   struct dash_type_numerical
@@ -1191,6 +1190,19 @@ struct user_definition
   static constexpr auto value = lexy::construct<ast::user_definition>;
 };
 
+struct cd
+{
+  static constexpr auto rule = dsl::p<string>;
+  static constexpr auto value = lexy::as_string<std::string> >> lexy::construct<
+                                    std::filesystem::path> >> lexy::construct<cd_command>;
+};
+
+struct pwd
+{
+  static constexpr auto rule = dsl::eof;
+  static constexpr auto value = lexy::constant(pwd_command{});
+};
+
 struct command_ast
 {
   static constexpr auto whitespace = dsl::ascii::space;
@@ -1199,6 +1211,8 @@ struct command_ast
                                | dsl::keyword<"set">(kw_id) >> dsl::p<set>
                                | dsl::keyword<"unset">(kw_id) >> dsl::p<unset>
                                | dsl::keyword<"show">(kw_id) >> dsl::p<show>
+                               | dsl::keyword<"cd">(kw_id) >> dsl::p<cd>
+                               | dsl::keyword<"pwd">(kw_id) >> dsl::p<pwd>
                                | dsl::keyword<"quit">(kw_id) >> dsl::p<quit>
                                | dsl::else_ >> dsl::p<user_definition>;
   static constexpr auto value = lexy::construct<ast::command>;
@@ -1211,6 +1225,8 @@ struct parametric_command_ast
                                | dsl::keyword<"set">(kw_id) >> dsl::p<set>
                                | dsl::keyword<"unset">(kw_id) >> dsl::p<unset>
                                | dsl::keyword<"show">(kw_id) >> dsl::p<show>
+                               | dsl::keyword<"cd">(kw_id) >> dsl::p<cd>
+                               | dsl::keyword<"pwd">(kw_id) >> dsl::p<pwd>
                                | dsl::keyword<"quit">(kw_id) >> dsl::p<quit>
                                | dsl::else_ >> dsl::p<user_definition>;
   static constexpr auto value = lexy::construct<ast::command>;

@@ -1,7 +1,9 @@
+#include "commands.hpp"
 #include "rect.hpp"
 #include <GL/glew.h>
 #include "rx.hpp"
 #include <GLFW/glfw3.h>
+#include <variant>
 #include <vector>
 #ifdef WIN32
 #include <readline/readline.h>
@@ -240,6 +242,15 @@ int main()
       else if (std::holds_alternative<user_definition>(cmd.value()))
       {
         add_definition(std::get<user_definition>(std::move(cmd.value())));
+      }
+      else if (std::holds_alternative<cd_command>(cmd.value()))
+      {
+        std::filesystem::current_path(std::get<cd_command>(cmd.value()).path);
+      }
+      else if (std::holds_alternative<pwd_command>(cmd.value()))
+      {
+        auto wd = std::filesystem::current_path().string();
+        fmt::println("{}", wd);
       }
       else
       {

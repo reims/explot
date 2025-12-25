@@ -546,35 +546,38 @@ std::expected<command, std::string> parse_command(const char *cmd)
   auto line = std::string_view(cmd);
   if (auto ast = parse_command_ast(line); ast)
   {
-    return std::visit(overload([](ast::plot_command_2d &&cmd) -> std::expected<command, std::string>
-                               { return validate(std::move(cmd)); },
-                               [](ast::plot_command_3d &&cmd) -> std::expected<command, std::string>
-                               { return validate(std::move(cmd)); },
-                               [](set_command &&cmd) -> std::expected<command, std::string>
-                               { return validate(std::move(cmd)); },
-                               [](unset_command &&cmd) -> std::expected<command, std::string>
-                               { return std::move(cmd); },
-                               [](show_command &&cmd) -> std::expected<command, std::string>
-                               { return std::move(cmd); },
-                               [](quit_command &&cmd) -> std::expected<command, std::string>
-                               { return std::move(cmd); },
-                               [](ast::user_definition &&cmd) -> std::expected<command, std::string>
-                               {
-                                 const auto params =
-                                     cmd.params
-                                         .transform([](const std::vector<std::string> &v)
-                                                    { return std::span{v}; })
-                                         .value_or(std::span<const std::string>{});
-                                 return validate_expression(std::move(cmd.body), params, false)
-                                     .transform(
-                                         [&](expr &&body)
-                                         {
-                                           return user_definition{.name = std::move(cmd.name),
-                                                                  .params = std::move(cmd.params),
-                                                                  .body = std::move(body)};
-                                         });
-                               }),
-                      std::move(*ast));
+    return std::visit(
+        overload(
+            [](ast::plot_command_2d &&cmd) -> std::expected<command, std::string>
+            { return validate(std::move(cmd)); },
+            [](ast::plot_command_3d &&cmd) -> std::expected<command, std::string>
+            { return validate(std::move(cmd)); },
+            [](set_command &&cmd) -> std::expected<command, std::string>
+            { return validate(std::move(cmd)); },
+            [](unset_command &&cmd) -> std::expected<command, std::string>
+            { return std::move(cmd); },
+            [](show_command &&cmd) -> std::expected<command, std::string>
+            { return std::move(cmd); },
+            [](quit_command &&cmd) -> std::expected<command, std::string>
+            { return std::move(cmd); },
+            [](cd_command &&cmd) -> std::expected<command, std::string> { return std::move(cmd); },
+            [](pwd_command &&cmd) -> std::expected<command, std::string> { return std::move(cmd); },
+            [](ast::user_definition &&cmd) -> std::expected<command, std::string>
+            {
+              const auto params =
+                  cmd.params
+                      .transform([](const std::vector<std::string> &v) { return std::span{v}; })
+                      .value_or(std::span<const std::string>{});
+              return validate_expression(std::move(cmd.body), params, false)
+                  .transform(
+                      [&](expr &&body)
+                      {
+                        return user_definition{.name = std::move(cmd.name),
+                                               .params = std::move(cmd.params),
+                                               .body = std::move(body)};
+                      });
+            }),
+        std::move(*ast));
   }
   else
   {

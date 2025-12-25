@@ -3,6 +3,7 @@
 #include <variant>
 #include <string>
 #include <vector>
+#include <filesystem>
 #include "range_setting.hpp"
 #include "box.hpp"
 #include "enum_utilities.hpp"
@@ -320,8 +321,17 @@ struct user_definition
   expr body;
 };
 
+struct cd_command
+{
+  std::filesystem::path path;
+};
+
+struct pwd_command
+{
+};
+
 using command = std::variant<quit_command, plot_command_2d, plot_command_3d, user_definition,
-                             set_command, show_command, unset_command>;
+                             set_command, show_command, unset_command, cd_command, pwd_command>;
 
 inline bool is_quit_command(const command &cmd)
 {
