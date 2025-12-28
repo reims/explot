@@ -13,9 +13,7 @@ namespace
 namespace explot
 {
 
-plot2d::plot2d(const plot_command_2d &cmd) : plot2d(cmd, resolve_line_types(cmd.graphs)) {}
-plot2d::plot2d(const plot_command_2d &cmd, const std::vector<line_type> &lts)
-    : legend(cmd.graphs, lts)
+plot2d::plot2d(const plot_command_2d &cmd) : legend(cmd.graphs)
 {
   graphs.reserve(cmd.graphs.size());
   auto [data, tb] = data_for_plot(cmd);
@@ -25,7 +23,7 @@ plot2d::plot2d(const plot_command_2d &cmd, const std::vector<line_type> &lts)
     const auto &g = cmd.graphs[i];
     auto &[vbo, desc] = data[i];
     auto br = bounding_rect_2d(vbo, desc.num_points);
-    graphs.emplace_back(std::move(vbo), desc, g.mark, lts[i]);
+    graphs.emplace_back(std::move(vbo), desc, g.mark, g.line_type);
     bounding = union_rect(bounding.value_or(br), br);
   }
   phase_space = bounding.value_or(clip_rect);

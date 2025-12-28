@@ -24,7 +24,6 @@ add_executable(explot
   program.cpp
   legend.cpp
   colors.cpp
-  line_type.cpp
   rx-renderers.cpp
   impulse.cpp
   user_definitions.cpp

@@ -11,7 +11,6 @@
 #include <charconv>
 #include <ranges>
 #include "colors.hpp"
-#include "settings.hpp"
 #include <numbers>
 
 namespace
@@ -697,14 +696,20 @@ constexpr auto graph_list_2d = lexy::fold_inplace<std::vector<ast::graph_desc_2d
       gs.push_back(std::move(g));
     });
 
+struct expr_list
+{
+  static constexpr auto rule = dsl::list(dsl::p<expr_>, dsl::sep(dsl::comma));
+  static constexpr auto value = lexy::as_list<std::vector<ast::expr>>;
+};
+
 struct plot
 {
   static constexpr auto whitespace = dsl::ascii::space;
 
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
-                                 | dsl::peek_not(str_delim) >> dsl::p<expr_>;
+    static constexpr auto rule =
+        dsl::peek(str_delim) >> dsl::p<csv_data_> | dsl::else_ >> dsl::p<expr_list>;
     static constexpr auto value = lexy::construct<ast::data_source_2d>;
   };
 
@@ -770,87 +775,6 @@ struct plot
       });
 };
 
-struct parametric_plot
-{
-  static constexpr auto whitespace = dsl::ascii::space;
-
-  using data_ast = std::variant<std::string, std::pair<ast::expr, ast::expr>>;
-
-  struct data
-  {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
-                                 | dsl::peek_not(str_delim)
-                                       >> dsl::twice(dsl::p<expr_>, dsl::sep(dsl::comma));
-    static constexpr auto value = lexy::callback<ast::data_source_2d>(
-        lexy::forward<ast::csv_data>,
-        [](ast::expr x, ast::expr y) { return ast::parametric_data_2d{x, y}; });
-  };
-
-  struct graph
-  {
-    static constexpr auto whitespace = dsl::ascii::space;
-    struct directives
-    {
-      static constexpr auto whitespace = dsl::ascii::space;
-      static constexpr auto rule =
-          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with_2d>,
-                                   LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
-                                   LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type_or_ref>);
-      static constexpr auto value = lexy::fold_inplace<ast::graph_desc_2d>(
-          [] { return ast::graph_desc_2d{}; }, [](auto &g, ast::mark_type_2d m) { g.mark = m; },
-          [](auto &g, std::string title) { g.title = std::move(title); },
-          [](ast::graph_desc_2d &g, const ast::line_type_desc &lt) { g.line_type = lt; });
-    };
-
-    static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
-    static constexpr auto value = lexy::callback<ast::graph_desc_2d>(
-        [](const char *s, ast::data_source_2d d, const char *e, ast::graph_desc_2d g)
-        {
-          g.data = std::move(d);
-          if (g.title.empty())
-          {
-            while (s != e && std::isspace(*s))
-            {
-              ++s;
-            }
-            while (s != e && std::isspace(*(e - 1)))
-            {
-              --e;
-            }
-            g.title = std::string(s, e);
-          }
-          return g;
-        });
-  };
-
-  struct graphs
-  {
-    static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
-    static constexpr auto value = graph_list_2d;
-  };
-
-  static constexpr auto rule = dsl::p<ranges> + dsl::p<graphs> + dsl::eof;
-  static constexpr auto value = lexy::callback<ast::plot_command_2d>(
-      [](const std::vector<range_setting> &rs, std::vector<ast::graph_desc_2d> gs)
-      {
-        auto cmd = ast::plot_command_2d{};
-        if (rs.size() > 0)
-        {
-          cmd.t_range = rs[0];
-        }
-        if (rs.size() > 1)
-        {
-          cmd.x_range = rs[1];
-        }
-        if (rs.size() > 2)
-        {
-          cmd.y_range = rs[2];
-        }
-        cmd.graphs = std::move(gs);
-        return cmd;
-      });
-};
-
 constexpr auto graph_list_3d = lexy::fold_inplace<std::vector<ast::graph_desc_3d>>(
     [] { return std::vector<ast::graph_desc_3d>(); },
     [](std::vector<ast::graph_desc_3d> &gs, ast::graph_desc_3d g)
@@ -883,8 +807,8 @@ struct splot
 
   struct data
   {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
-                                 | dsl::peek_not(str_delim) >> dsl::p<expr_>;
+    static constexpr auto rule =
+        dsl::peek(str_delim) >> dsl::p<csv_data_> | dsl::else_ >> dsl::p<expr_list>;
     static constexpr auto value = lexy::construct<ast::data_source_3d>;
   };
 
@@ -943,89 +867,6 @@ struct splot
         if (rs.size() > 1)
         {
           cmd.y_range = rs[1];
-        }
-        cmd.graphs = std::move(gs);
-        return cmd;
-      });
-};
-
-struct parametric_splot
-{
-  static constexpr auto whitespace = dsl::ascii::space;
-
-  struct data
-  {
-    static constexpr auto rule = dsl::peek(str_delim) >> dsl::p<csv_data_>
-                                 | dsl::peek_not(str_delim)
-                                       >> dsl::times<3>(dsl::p<expr_>, dsl::sep(dsl::lit_c<','>));
-    static constexpr auto value = lexy::callback<ast::data_source_3d>(
-        lexy::forward<ast::csv_data>,
-        [](ast::expr x, ast::expr y, ast::expr z) { return ast::parametric_data_3d{x, y, z}; });
-  };
-
-  struct graph
-  {
-    static constexpr auto whitespace = dsl::ascii::space;
-    struct directives
-    {
-      static constexpr auto whitespace = dsl::ascii::space;
-      static constexpr auto rule =
-          dsl::partial_combination(LEXY_KEYWORD("with", kw_id) >> dsl::p<with_3d>,
-                                   LEXY_KEYWORD("title", kw_id) >> dsl::p<title>,
-                                   LEXY_KEYWORD("lt", kw_id) >> dsl::p<line_type>);
-      static constexpr auto value = lexy::fold_inplace<ast::graph_desc_3d>(
-          [] { return ast::graph_desc_3d{}; }, [](auto &g, ast::mark_type_3d m) { g.mark = m; },
-          [](auto &g, std::string title) { g.title = std::move(title); },
-          [](ast::graph_desc_3d &g, const ast::line_type_desc &lt) { g.line_type = lt; });
-    };
-
-    static constexpr auto rule = dsl::position + dsl::p<data> + dsl::position + dsl::p<directives>;
-    static constexpr auto value = lexy::callback<ast::graph_desc_3d>(
-        [](const char *s, ast::data_source_3d d, const char *e, ast::graph_desc_3d g)
-        {
-          if (g.title.empty())
-          {
-            while (s != e && std::isspace(*s))
-            {
-              ++s;
-            }
-            while (s != e && std::isspace(*(e - 1)))
-            {
-              --e;
-            }
-            g.title = std::string(s, e);
-          }
-          g.data = std::move(d);
-          return g;
-        });
-  };
-
-  struct graphs
-  {
-    static constexpr auto rule = dsl::list(dsl::p<graph>, dsl::sep(dsl::comma));
-    static constexpr auto value = graph_list_3d;
-  };
-
-  static constexpr auto rule = dsl::p<ranges> + dsl::p<graphs> + dsl::eof;
-  static constexpr auto value = lexy::callback<ast::plot_command_3d>(
-      [](const std::vector<range_setting> &rs, std::vector<ast::graph_desc_3d> gs)
-      {
-        auto cmd = ast::plot_command_3d{};
-        if (rs.size() > 0)
-        {
-          cmd.u_range = rs[0];
-        }
-        if (rs.size() > 1)
-        {
-          cmd.v_range = rs[1];
-        }
-        if (rs.size() > 2)
-        {
-          cmd.x_range = rs[2];
-        }
-        if (rs.size() > 3)
-        {
-          cmd.y_range = rs[3];
         }
         cmd.graphs = std::move(gs);
         return cmd;
@@ -1218,20 +1059,6 @@ struct command_ast
   static constexpr auto value = lexy::construct<ast::command>;
 };
 
-struct parametric_command_ast
-{
-  static constexpr auto rule = dsl::keyword<"plot">(kw_id) >> dsl::p<parametric_plot>
-                               | dsl::keyword<"splot">(kw_id) >> dsl::p<parametric_splot>
-                               | dsl::keyword<"set">(kw_id) >> dsl::p<set>
-                               | dsl::keyword<"unset">(kw_id) >> dsl::p<unset>
-                               | dsl::keyword<"show">(kw_id) >> dsl::p<show>
-                               | dsl::keyword<"cd">(kw_id) >> dsl::p<cd>
-                               | dsl::keyword<"pwd">(kw_id) >> dsl::p<pwd>
-                               | dsl::keyword<"quit">(kw_id) >> dsl::p<quit>
-                               | dsl::else_ >> dsl::p<user_definition>;
-  static constexpr auto value = lexy::construct<ast::command>;
-};
-
 } // namespace r
 } // namespace
 
@@ -1240,29 +1067,14 @@ namespace explot
 std::optional<ast::command> parse_command_ast(std::string_view line)
 {
   auto input = lexy::string_input<lexy::utf8_char_encoding>(line.data(), line.data() + line.size());
-  if (settings::parametric())
+  auto result = lexy::parse<r::command_ast>(input, lexy_ext::report_error);
+  if (result.is_success())
   {
-    auto result = lexy::parse<r::parametric_command_ast>(input, lexy_ext::report_error);
-    if (result.is_success())
-    {
-      return result.value();
-    }
-    else
-    {
-      return std::nullopt;
-    }
+    return result.value();
   }
   else
   {
-    auto result = lexy::parse<r::command_ast>(input, lexy_ext::report_error);
-    if (result.is_success())
-    {
-      return result.value();
-    }
-    else
-    {
-      return std::nullopt;
-    }
+    return std::nullopt;
   }
 }
 

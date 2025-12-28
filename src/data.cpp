@@ -6,7 +6,6 @@
 #include <fmt/ranges.h>
 #include "csv.hpp"
 #include <array>
-#include "settings.hpp"
 #include "overload.hpp"
 #include "range_setting.hpp"
 #include <algorithm>
@@ -461,7 +460,7 @@ struct row_data
 };
 
 std::pair<std::vector<row_data>, time_point>
-row_data_for_graphs(const std::span<const graph_desc_2d> gs)
+row_data_for_graphs(const std::span<const graph_desc_2d> gs, char separator)
 {
   auto files = std::unordered_map<std::string_view, std::vector<int>>();
   for (const auto &g : gs)
@@ -488,8 +487,7 @@ row_data_for_graphs(const std::span<const graph_desc_2d> gs)
     std::ranges::sort(indices);
     indices.erase(std::ranges::unique(indices).begin(), indices.end());
     auto num_indices = indices.size();
-    auto data = num_indices > 0 ? read_csv(f, settings::datafile::separator(), indices, timebase)
-                                : std::vector<float>();
+    auto data = num_indices > 0 ? read_csv(f, separator, indices, timebase) : std::vector<float>();
     assert(data.size() % num_indices == 0);
     auto num_points =
         static_cast<uint32_t>(num_indices > 0 ? data.size() / num_indices : count_lines(f));
@@ -508,7 +506,7 @@ row_data_for_graphs(const std::span<const graph_desc_2d> gs)
 }
 
 std::pair<std::vector<row_data>, time_point>
-row_data_for_graphs(const std::span<const graph_desc_3d> gs)
+row_data_for_graphs(const std::span<const graph_desc_3d> gs, char separator)
 {
   // using ordered map, because there is no std::hash for tuple or pair
   auto files = std::map<std::tuple<std::string_view, bool>, std::vector<int>>();
@@ -539,7 +537,7 @@ row_data_for_graphs(const std::span<const graph_desc_3d> gs)
     auto num_indices = static_cast<uint32_t>(indices.size());
     if (matrix)
     {
-      auto [data, columns] = read_matrix_csv(f, settings::datafile::separator(), timebase);
+      auto [data, columns] = read_matrix_csv(f, separator, timebase);
       assert(data.size() % 3 == 0);
       auto num_points = static_cast<uint32_t>(data.size() / 3);
       assert(num_points % columns == 0);
@@ -560,7 +558,7 @@ row_data_for_graphs(const std::span<const graph_desc_3d> gs)
         }
         else
         {
-          return read_csv(f, settings::datafile::separator(), indices, timebase);
+          return read_csv(f, separator, indices, timebase);
         }
       }();
       assert(data.size() % num_indices == 0);
@@ -951,7 +949,7 @@ seq_data_desc::seq_data_desc(uint32_t point_size, std::vector<GLsizei> count)
 std::tuple<std::vector<std::tuple<vbo_handle, seq_data_desc>>, time_point>
 data_for_plot(const plot_command_2d &plot)
 {
-  auto [row_data, timebase] = row_data_for_graphs(plot.graphs);
+  auto [row_data, timebase] = row_data_for_graphs(plot.graphs, plot.separator);
   auto result = std::vector<std::tuple<vbo_handle, seq_data_desc>>();
   result.reserve(plot.graphs.size());
   std::ranges::copy(
@@ -962,10 +960,7 @@ data_for_plot(const plot_command_2d &plot)
             return std::visit(
                 overload(
                     [&](const expr &expr)
-                    {
-                      return data_for_expression_2d(g.mark, expr, settings::samples().x,
-                                                    plot.x_range);
-                    },
+                    { return data_for_expression_2d(g.mark, expr, plot.samples.x, plot.x_range); },
                     [&](const csv_data &c)
                     {
                       auto &rd = *std::ranges::find_if(row_data, [&](const struct row_data &r)
@@ -975,8 +970,7 @@ data_for_plot(const plot_command_2d &plot)
                     },
                     [&](const parametric_data_2d &c)
                     {
-                      return data_for_parametric_2d(c.expressions, settings::samples().x,
-                                                    plot.t_range);
+                      return data_for_parametric_2d(c.expressions, plot.samples.x, plot.t_range);
                     }),
                 g.data);
           }),
@@ -986,7 +980,7 @@ data_for_plot(const plot_command_2d &plot)
 
 std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_3d &plot)
 {
-  auto [row_data, time_base] = row_data_for_graphs(plot.graphs);
+  auto [row_data, time_base] = row_data_for_graphs(plot.graphs, plot.separator);
   auto result = std::vector<std::tuple<vbo_handle, data_desc>>();
   result.reserve(plot.graphs.size());
   std::ranges::copy(
@@ -1000,14 +994,13 @@ std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_
                     {
                       if (g.mark == mark_type_3d::surface || g.mark == mark_type_3d::pm3d)
                       {
-                        return grid_data_for_expression_3d(expr, settings::samples(), plot.x_range,
+                        return grid_data_for_expression_3d(expr, plot.samples, plot.x_range,
                                                            plot.y_range);
                       }
                       else
                       {
-                        return data_for_expression_3d(expr, settings::isosamples(),
-                                                      settings::samples(), plot.x_range,
-                                                      plot.y_range);
+                        return data_for_expression_3d(expr, plot.isosamples, plot.samples,
+                                                      plot.x_range, plot.y_range);
                       }
                     },
                     [&](const csv_data &c) -> std::tuple<vbo_handle, data_desc>
@@ -1032,9 +1025,8 @@ std::vector<std::tuple<vbo_handle, data_desc>> data_for_plot(const plot_command_
                     },
                     [&](const parametric_data_3d &c) -> std::tuple<vbo_handle, data_desc>
                     {
-                      return data_for_parametric_3d(c.expressions, settings::isosamples(),
-                                                    settings::samples(), plot.u_range,
-                                                    plot.v_range);
+                      return data_for_parametric_3d(c.expressions, plot.isosamples, plot.samples,
+                                                    plot.u_range, plot.v_range);
                     }),
                 g.data);
           }),

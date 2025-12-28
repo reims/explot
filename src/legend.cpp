@@ -1,5 +1,4 @@
 #include "legend.hpp"
-#include <memory>
 #include <string>
 #include <glm/glm.hpp>
 #include <unordered_set>
@@ -25,7 +24,6 @@ std::string glyphs_for_graphs(std::span<const graph_desc_2d> graphs)
   }
   std::ranges::sort(glyphs);
   glyphs.erase(std::unique(glyphs.begin(), glyphs.end()), glyphs.end());
-  // str.erase(std::remove(str.begin(), str.end(), ' ')
 
   return glyphs;
 }
@@ -59,37 +57,35 @@ seq_data_desc make_line_data(gl_id vbo)
 namespace explot
 {
 
-legend::legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts)
+legend::legend(std::span<const graph_desc_2d> graphs)
     : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
   marks.reserve(graphs.size());
   vbos.reserve(graphs.size());
-  auto i = 0u;
   for (const auto &g : graphs)
   {
+    const auto &lt = g.line_type;
     auto &vbo = vbos.emplace_back(make_vbo());
     switch (g.mark)
     {
     case mark_type_2d::points:
-      marks.emplace_back(
-          points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color, 9.0f));
+      marks.emplace_back(points_2d_state(vbo, make_point_data(vbo), lt.width, lt.color, 9.0f));
       break;
     case mark_type_2d::impulses:
     case mark_type_2d::lines:
-      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color));
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lt.width, lt.color));
       break;
     }
     titles.emplace_back(font, g.title, text_color);
-    colors.push_back(graph_colors[(i++) % num_graph_colors]);
+    colors.push_back(lt.color);
   }
 }
 
-legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts)
+legend::legend(std::span<const graph_desc_3d> graphs)
     : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
 {
-  auto i = 0u;
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
   marks.reserve(graphs.size());
@@ -97,22 +93,22 @@ legend::legend(std::span<const graph_desc_3d> graphs, std::span<const line_type>
   for (const auto &g : graphs)
   {
     auto &vbo = vbos.emplace_back(make_vbo());
+    auto &lt = g.line_type;
     switch (g.mark)
     {
     case mark_type_3d::points:
-      marks.emplace_back(
-          points_2d_state(vbo, make_point_data(vbo), lts[i].width, lts[i].color, 9.0f));
+      marks.emplace_back(points_2d_state(vbo, make_point_data(vbo), lt.width, lt.color, 9.0f));
       break;
     case mark_type_3d::lines:
-      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color));
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lt.width, lt.color));
       break;
     case mark_type_3d::surface:
     case explot::mark_type_3d::pm3d:
-      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lts[i].width, lts[i].color));
+      marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lt.width, lt.color));
       break;
     }
     titles.emplace_back(font, g.title, text_color);
-    colors.push_back(lts[i++].color);
+    colors.push_back(lt.color);
   }
 }
 

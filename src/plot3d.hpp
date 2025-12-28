@@ -17,9 +17,6 @@ struct plot3d final
   tics_desc phase_space;
   coordinate_system_3d cs;
   legend legend;
-
-private:
-  plot3d(const plot_command_3d &cmd, std::span<const line_type> lts);
 };
 
 void update(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,

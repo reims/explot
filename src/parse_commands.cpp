@@ -340,64 +340,134 @@ std::expected<csv_data, std::string> validate(mark_type_2d mark, ast::csv_data &
                         });
 }
 
-std::expected<expr, std::string> validate(mark_type_2d, ast::expr &&e)
+std::expected<expr, std::string> validate_function(mark_type_2d, std::vector<ast::expr> &&exprs)
 {
-  auto x = std::string("x");
-  return validate_expression(std::move(e), {&x, 1}, false);
+  if (exprs.size() != 1)
+  {
+    return std::unexpected("2d function needs 1 expression.");
+  }
+  else
+  {
+    auto x = std::string("x");
+    return validate_expression(std::move(exprs[0]), {&x, 1}, false);
+  }
 }
 
-std::expected<expr, std::string> validate(mark_type_3d, ast::expr &&e)
+std::expected<expr, std::string> validate_function(mark_type_3d, std::vector<ast::expr> &&exprs)
 {
-  std::string vars[]{"x", "y"};
-  return validate_expression(std::move(e), vars, false);
+  if (exprs.size() != 1)
+  {
+    return std::unexpected("3d function needs 1 expression.");
+  }
+  else
+  {
+    std::string vars[]{"x", "y"};
+    return validate_expression(std::move(exprs[0]), vars, false);
+  }
 }
 
-std::expected<parametric_data_2d, std::string> validate(mark_type_2d m,
-                                                        ast::parametric_data_2d &&data)
+std::expected<parametric_data_2d, std::string> validate_parametric(mark_type_2d m,
+                                                                   std::vector<ast::expr> &&exprs)
 {
   // TODO: implement impulses
   if (m == mark_type_2d::impulses)
   {
     return std::unexpected("impulses for parametric plots is not implemented yet.");
   }
+  else if (exprs.size() != 2)
+  {
+    return std::unexpected("parametric 2d graph requires 2 expressions.");
+  }
   else
   {
     auto t = std::string("t");
-    return validate_expression(std::move(data.x_expression), {&t, 1}, false)
+    auto &x_expression = exprs[0];
+    auto &y_expression = exprs[1];
+    return validate_expression(std::move(x_expression), {&t, 1}, false)
         .and_then(
             [&](expr &&x)
             {
-              return validate_expression(std::move(data.y_expression), {&t, 1}, false)
+              return validate_expression(std::move(y_expression), {&t, 1}, false)
                   .transform([&](expr &&y)
                              { return parametric_data_2d{std::move(x), std::move(y)}; });
             });
   }
 }
 
-std::expected<parametric_data_3d, std::string> validate(mark_type_3d,
-                                                        ast::parametric_data_3d &&data)
+std::expected<parametric_data_3d, std::string> validate_parametric(mark_type_3d,
+                                                                   std::vector<ast::expr> &&exprs)
 {
   // TODO: check that expressions are valid
   std::string vars[] = {"u", "v"};
 
-  return validate_expression(std::move(data.x_expression), vars, false)
-      .and_then(
-          [&](expr &&x)
+  if (exprs.size() != 3)
+  {
+    return std::unexpected("parametric 3d graph needs 3 expressions.");
+  }
+  else
+  {
+    auto &x_expression = exprs[0];
+    auto &y_expression = exprs[1];
+    auto &z_expression = exprs[2];
+    return validate_expression(std::move(x_expression), vars, false)
+        .and_then(
+            [&](expr &&x)
+            {
+              return validate_expression(std::move(y_expression), vars, false)
+                  .transform([&](expr &&y) { return std::make_tuple(std::move(x), std::move(y)); });
+            })
+        .and_then(
+            [&](auto &&t)
+            {
+              return validate_expression(std::move(z_expression), vars, false)
+                  .transform(
+                      [&](expr &&z)
+                      {
+                        return parametric_data_3d{std::move(std::get<0>(t)),
+                                                  std::move(std::get<1>(t)), std::move(z)};
+                      });
+            });
+  }
+}
+
+std::expected<data_source_2d, std::string> validate(mark_type_2d mark, ast::data_source_2d &&d)
+{
+  return std::visit(
+      overload(
+          [&](std::vector<ast::expr> &&exprs) -> std::expected<data_source_2d, std::string>
           {
-            return validate_expression(std::move(data.y_expression), vars, false)
-                .transform([&](expr &&y) { return std::make_tuple(x, y); });
-          })
-      .and_then(
-          [&](auto &&t)
+            if (settings::parametric())
+            {
+              return validate_parametric(mark, std::move(exprs));
+            }
+            else
+            {
+              return validate_function(mark, std::move(exprs));
+            }
+          },
+          [&](ast::csv_data &&csv) -> std::expected<data_source_2d, std::string>
+          { return validate(mark, std::move(csv)); }),
+      std::move(d));
+}
+
+std::expected<data_source_3d, std::string> validate(mark_type_3d mark, ast::data_source_3d &&d)
+{
+  return std::visit(
+      overload(
+          [&](std::vector<ast::expr> &&exprs) -> std::expected<data_source_3d, std::string>
           {
-            return validate_expression(std::move(data.z_expression), vars, false)
-                .transform(
-                    [&](expr &&z)
-                    {
-                      return parametric_data_3d{std::move(std::get<0>(t)),
-                                                std::move(std::get<1>(t)), std::move(z)};
-                    });
-          });
+            if (settings::parametric())
+            {
+              return validate_parametric(mark, std::move(exprs));
+            }
+            else
+            {
+              return validate_function(mark, std::move(exprs));
+            }
+          },
+          [&](ast::csv_data &&csv) -> std::expected<data_source_3d, std::string>
+          { return validate(mark, std::move(csv)); }),
+      std::move(d));
 }
 
 mark_type_2d transform_mark(ast::mark_type_2d mark)
@@ -433,32 +503,48 @@ mark_type_3d transform_mark(ast::mark_type_3d mark)
   }
 }
 
-line_type_spec transform_lts(const ast::line_type_spec &s)
+template <typename T>
+std::vector<line_type> resolve_line_types(std::span<const T> graphs)
 {
-  auto dt = s.dash_type.and_then(
-      [](const dash_type_desc &dd) -> std::optional<dash_type>
-      {
-        if (std::holds_alternative<dash_type>(dd))
-        {
-          return std::get<dash_type>(dd);
-        }
-        else
-        {
-          return std::nullopt;
-        }
-      });
-  return {.color = s.color, .width = s.width, .dash_type = dt};
+  auto result = std::vector<line_type>();
+  result.reserve(graphs.size());
+  auto idx = 1u;
+  for (const auto &g : graphs)
+  {
+    auto lt = std::visit(overload(
+                             [&](uint32_t ref)
+                             {
+                               idx = ref;
+                               return settings::line_type_by_index(idx);
+                             },
+                             [&](ast::line_type_spec lt)
+                             {
+                               const auto &ref = settings::line_type_by_index(idx);
+                               auto dt = lt.dash_type.and_then(
+                                   [](dash_type_desc dd) -> std::optional<dash_type>
+                                   {
+                                     if (std::holds_alternative<dash_type>(dd))
+                                     {
+                                       return std::get<dash_type>(dd);
+                                     }
+                                     else
+                                     {
+                                       return std::nullopt;
+                                     }
+                                   });
+                               return line_type{.width = lt.width.value_or(ref.width),
+                                                .color = lt.color.value_or(ref.color),
+                                                .dash_type = dt,
+                                                .index = idx};
+                             }),
+                         g.line_type);
+    result.push_back(lt);
+    ++idx;
+  }
+  return result;
 }
 
-line_type_desc transform_lt(const ast::line_type_desc &d)
-{
-  return std::visit(overload([](uint32_t i) -> line_type_desc { return i; },
-                             [](const ast::line_type_spec &s) -> line_type_desc
-                             { return transform_lts(s); }),
-                    d);
-}
-
-std::expected<graph_desc_2d, std::string> validate(ast::graph_desc_2d &&graph)
+std::expected<graph_desc_2d, std::string> validate(ast::graph_desc_2d &&graph, line_type &&lt)
 {
   auto mark = transform_mark(graph.mark);
   auto data = std::visit([&](auto &&d) -> std::expected<data_source_2d, std::string>
@@ -469,11 +555,11 @@ std::expected<graph_desc_2d, std::string> validate(ast::graph_desc_2d &&graph)
         return graph_desc_2d{.data = std::move(d),
                              .mark = mark,
                              .title = std::move(graph.title),
-                             .line_type = transform_lt(graph.line_type)};
+                             .line_type = std::move(lt)};
       });
 }
 
-std::expected<graph_desc_3d, std::string> validate(ast::graph_desc_3d &&graph)
+std::expected<graph_desc_3d, std::string> validate(ast::graph_desc_3d &&graph, line_type &&lt)
 {
   auto mark = transform_mark(graph.mark);
   auto data = std::visit([&](auto &&d) -> std::expected<data_source_3d, std::string>
@@ -484,30 +570,36 @@ std::expected<graph_desc_3d, std::string> validate(ast::graph_desc_3d &&graph)
         return graph_desc_3d{.data = std::move(d),
                              .mark = mark,
                              .title = std::move(graph.title),
-                             .line_type = transform_lt(graph.line_type)};
+                             .line_type = std::move(lt)};
       });
 }
 
 std::expected<plot_command_2d, std::string> validate(ast::plot_command_2d &&plot)
 {
-  return validate_all(
-             moving_range(plot.graphs)
-             | std::views::transform([](ast::graph_desc_2d &&g) { return validate(std::move(g)); }))
+  auto lts = resolve_line_types(std::span(std::as_const(plot.graphs)));
+  return validate_all(std::views::zip_transform([](ast::graph_desc_2d &&g, line_type &&lt)
+                                                { return validate(std::move(g), std::move(lt)); },
+                                                moving_range(plot.graphs), moving_range(lts)))
       .transform(
           [&](std::vector<graph_desc_2d> &&gs)
           {
             return plot_command_2d{.graphs = std::move(gs),
                                    .x_range = plot.x_range,
                                    .y_range = plot.y_range,
-                                   .t_range = plot.t_range};
+                                   .t_range = plot.t_range,
+                                   .xdata = settings::xdata(),
+                                   .samples = settings::samples(),
+                                   .isosamples = settings::isosamples(),
+                                   .separator = settings::datafile::separator()};
           });
 }
 
 std::expected<plot_command_3d, std::string> validate(ast::plot_command_3d &&plot)
 {
-  return validate_all(
-             moving_range(plot.graphs)
-             | std::views::transform([](ast::graph_desc_3d &&g) { return validate(std::move(g)); }))
+  auto lts = resolve_line_types(std::span(std::as_const(plot.graphs)));
+  return validate_all(std::views::zip_transform([](ast::graph_desc_3d &&g, line_type &&lt)
+                                                { return validate(std::move(g), std::move(lt)); },
+                                                moving_range(plot.graphs), moving_range(lts)))
       .transform(
           [&](std::vector<graph_desc_3d> &&gs)
           {
@@ -515,7 +607,10 @@ std::expected<plot_command_3d, std::string> validate(ast::plot_command_3d &&plot
                                    .x_range = plot.x_range,
                                    .y_range = plot.y_range,
                                    .u_range = plot.u_range,
-                                   .v_range = plot.v_range};
+                                   .v_range = plot.v_range,
+                                   .samples = settings::samples(),
+                                   .isosamples = settings::isosamples(),
+                                   .separator = settings::datafile::separator()};
           });
 }
 

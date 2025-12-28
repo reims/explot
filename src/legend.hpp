@@ -22,8 +22,8 @@ struct legend
   std::vector<glm::vec4> colors;
   std::vector<vbo_handle> vbos;
 
-  legend(std::span<const graph_desc_2d> graphs, std::span<const line_type> lts);
-  legend(std::span<const graph_desc_3d> graphs, std::span<const line_type> lts);
+  legend(std::span<const graph_desc_2d> graphs);
+  legend(std::span<const graph_desc_3d> graphs);
 };
 
 void update(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip);

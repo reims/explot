@@ -7,6 +7,7 @@
 #include "range_setting.hpp"
 #include "box.hpp"
 #include "enum_utilities.hpp"
+#include "line_type.hpp"
 
 namespace explot
 {
@@ -84,26 +85,6 @@ struct user_function_call
   std::vector<expr> args;
 };
 
-struct dash_type
-{
-  std::vector<std::pair<uint32_t, uint32_t>> segments;
-};
-
-struct solid
-{
-};
-
-using dash_type_desc = std::variant<solid, dash_type, uint32_t>;
-
-struct line_type_spec
-{
-  std::optional<glm::vec4> color;
-  std::optional<float> width;
-  std::optional<dash_type_desc> dash_type;
-};
-
-using line_type_desc = std::variant<line_type_spec, uint32_t>;
-
 struct csv_data final
 {
   std::string path;
@@ -138,7 +119,19 @@ struct graph_desc_2d final
   data_source_2d data;
   mark_type_2d mark;
   std::string title;
-  line_type_desc line_type;
+  line_type line_type;
+};
+
+enum class data_type : char
+{
+  normal,
+  time
+};
+
+struct samples_setting final
+{
+  uint32_t x = 100;
+  uint32_t y = 100;
 };
 
 struct plot_command_2d final
@@ -147,6 +140,10 @@ struct plot_command_2d final
   range_setting x_range;
   range_setting y_range;
   range_setting t_range;
+  data_type xdata;
+  samples_setting samples;
+  samples_setting isosamples;
+  char separator;
 };
 
 struct parametric_data_3d final
@@ -161,7 +158,7 @@ struct graph_desc_3d final
   data_source_3d data;
   mark_type_3d mark;
   std::string title;
-  line_type_desc line_type;
+  line_type line_type;
 };
 
 struct plot_command_3d final
@@ -171,18 +168,9 @@ struct plot_command_3d final
   range_setting y_range;
   range_setting u_range;
   range_setting v_range;
-};
-
-struct samples_setting final
-{
-  uint32_t x = 100;
-  uint32_t y = 100;
-};
-
-enum class data_type : char
-{
-  normal,
-  time
+  samples_setting samples;
+  samples_setting isosamples;
+  char separator;
 };
 
 struct multiplot_setting

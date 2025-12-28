@@ -1,13 +1,25 @@
 #pragma once
 
-#include "commands.hpp"
 #include <cstdint>
 #include <glm/glm.hpp>
-#include <span>
+#include <variant>
+#include <optional>
 #include <vector>
 
 namespace explot
 {
+
+struct dash_type
+{
+  std::vector<std::pair<uint32_t, uint32_t>> segments;
+};
+
+struct solid
+{
+};
+
+using dash_type_desc = std::variant<solid, dash_type, uint32_t>;
+
 struct line_type final
 {
   float width;
@@ -16,6 +28,4 @@ struct line_type final
   uint32_t index;
 };
 
-std::vector<line_type> resolve_line_types(std::span<const graph_desc_2d> graphs);
-std::vector<line_type> resolve_line_types(std::span<const graph_desc_3d> graphs);
 } // namespace explot

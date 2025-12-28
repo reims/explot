@@ -11,17 +11,17 @@
 namespace
 {
 using namespace explot;
-auto graphs_for_descs(const plot_command_3d &plot, std::span<const line_type> lts,
+auto graphs_for_descs(const plot_command_3d &plot,
                       std::vector<std::tuple<vbo_handle, data_desc>> &&data)
 {
-  const auto &descs = plot.graphs;
+  const auto &graphs = plot.graphs;
   auto result = std::vector<graph3d>();
-  result.reserve(descs.size());
+  result.reserve(graphs.size());
 
-  for (auto i = 0U; i < descs.size(); ++i)
+  for (auto i = 0U; i < graphs.size(); ++i)
   {
-    result.emplace_back(std::move(std::get<0>(data[i])), std::get<1>(data[i]), descs[i].mark,
-                        lts[i]);
+    result.emplace_back(std::move(std::get<0>(data[i])), std::get<1>(data[i]), graphs[i].mark,
+                        graphs[i].line_type);
   }
 
   return result;
@@ -49,13 +49,11 @@ auto bounding_rect_for_graphs(std::span<const graph3d> graphs)
 
 namespace explot
 {
-plot3d::plot3d(const plot_command_3d &cmd, std::span<const line_type> lts)
-    : graphs(graphs_for_descs(cmd, lts, data_for_plot(cmd))),
-      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7), legend(cmd.graphs, lts)
+plot3d::plot3d(const plot_command_3d &cmd)
+    : graphs(graphs_for_descs(cmd, data_for_plot(cmd))),
+      phase_space(bounding_rect_for_graphs(graphs)), cs(phase_space, 7), legend(cmd.graphs)
 {
 }
-
-plot3d::plot3d(const plot_command_3d &cmd) : plot3d(cmd, resolve_line_types(cmd.graphs)) {}
 
 void update(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,
             const rect &screen)

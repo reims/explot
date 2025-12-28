@@ -76,12 +76,6 @@ struct csv_data final
   bool matrix;
 };
 
-struct parametric_data_2d final
-{
-  expr x_expression;
-  expr y_expression;
-};
-
 enum struct mark_type_2d
 {
   points,
@@ -96,7 +90,7 @@ enum struct mark_type_3d
   pm3d
 };
 
-using data_source_2d = std::variant<expr, csv_data, parametric_data_2d>;
+using data_source_2d = std::variant<std::vector<expr>, csv_data>;
 
 struct graph_desc_2d final
 {
@@ -114,14 +108,7 @@ struct plot_command_2d final
   range_setting t_range;
 };
 
-struct parametric_data_3d final
-{
-  expr x_expression;
-  expr y_expression;
-  expr z_expression;
-};
-
-using data_source_3d = std::variant<expr, csv_data, parametric_data_3d>;
+using data_source_3d = std::variant<std::vector<expr>, csv_data>;
 
 struct graph_desc_3d final
 {
