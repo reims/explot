@@ -44,7 +44,9 @@ rx::observable<unit> plot_renderer(rx::observe_on_one_worker &on_run_loop,
              [=](rx::resource<plot_with_view_space> res)
              {
                auto ds = drags(screen_space, part).publish().ref_count();
-               auto drops = ds.transform([](auto d) { return d.last(); }).concat();
+               auto drops = ds.transform([](auto d) { return d.default_if_empty(drag{}).last(); })
+                                .concat()
+                                .filter([](const drag &d) { return d.from != d.to; });
                auto local_screen = screen_space.transform(
                    [=](const rect &screen)
                    {
@@ -105,7 +107,7 @@ rx::observable<unit> plot_renderer(rx::observe_on_one_worker &on_run_loop,
                                     [=](rx::resource<drag_render_state> res)
                                     {
                                       return frames | rx::observe_on(on_run_loop)
-                                             | rx::take_until(ds | rx::last())
+                                             | rx::take_until(closed(ds))
                                              | rx::with_latest_from(
                                                  [res = std::move(res)](unit, const drag &d,
                                                                         const rect &r)

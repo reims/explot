@@ -4,6 +4,7 @@
 
 namespace
 {
+
 rx::subjects::subject<glm::vec2> mouse_move_subject;
 auto mouse_move_subscriber = mouse_move_subject.get_subscriber();
 auto mouse_move_observable = mouse_move_subject.get_observable() | rx::publish() | rx::ref_count();
@@ -13,22 +14,6 @@ auto mouse_down_observable = mouse_down_subject.get_observable() | rx::publish()
 rx::subjects::subject<int> mouse_up_subject;
 auto mouse_up_subscriber = mouse_up_subject.get_subscriber();
 auto mouse_up_observable = mouse_up_subject.get_observable() | rx::publish() | rx::ref_count();
-auto drags_observable =
-    mouse_down_observable
-    | rx::with_latest_from(
-        [](int, glm::vec2 from)
-        {
-          return mouse_move_observable
-                 | rx::transform([from](glm::vec2 to)
-                                 { return explot::drag{.from = from, .to = to}; })
-                 | rx::take_until(mouse_up_observable) | rx::publish() | rx::ref_count()
-                 | rx::as_dynamic();
-        },
-        mouse_move_observable)
-    | rx::publish() | rx::ref_count();
-
-auto drops_observable = drags_observable | rx::transform([](auto ds) { return ds | rx::last(); })
-                        | rx::concat() | rx::publish() | rx::ref_count();
 rx::subjects::subject<int> key_press_subject;
 auto key_press_subscriber = key_press_subject.get_subscriber();
 auto key_press_observable = key_press_subject.get_observable();
@@ -71,8 +56,6 @@ void init_events(GLFWwindow *window)
 rx::observable<glm::vec2> mouse_moves() { return mouse_move_observable; }
 rx::observable<int> mouse_ups() { return mouse_up_observable; }
 rx::observable<int> mouse_downs() { return mouse_down_observable; }
-rx::observable<rx::observable<drag>> drags() { return drags_observable; }
-rx::observable<drag> drops() { return drops_observable; }
 rx::observable<int> key_presses() { return key_press_observable; }
 
 rect drag_to_rect(const drag &d, float height)
@@ -114,6 +97,7 @@ rx::observable<rx::observable<drag>> drags(rx::observable<rect> screen, const re
               screen)
           .filter([](const auto &t) { return contains(std::get<1>(t), std::get<0>(t)); })
           .transform([](const auto &t) { return std::get<2>(t); });
+
   return all_drags;
 }
 } // namespace explot
