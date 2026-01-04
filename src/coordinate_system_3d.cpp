@@ -39,7 +39,7 @@ namespace explot
 coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t num_ticks)
     : scale_to_phase(transform(clip_rect, tics.bounding_rect)), vbo(make_vbo()),
       lines(vbo, data_for_coordinate_system(vbo, num_ticks), 1.0f, axis_color),
-      font(make_font_atlas("+-.,0123456789eE", 10).value())
+      font(make_font_atlas("+-.,0123456789eE"))
 {
   const auto &br = tics.bounding_rect;
   const auto steps = (br.upper_bounds - br.lower_bounds) / static_cast<float>(num_ticks - 1);

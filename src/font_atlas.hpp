@@ -3,9 +3,9 @@
 #include "gl-handle.hpp"
 #include <string>
 #include <glm/glm.hpp>
-#include <optional>
 #include <ft2build.h>
 #include <vector>
+#include <expected>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
 
@@ -37,21 +37,20 @@ using freetype_handle = std::unique_ptr<ft_library, func_wrapper<FT_Done_FreeTyp
 using font_handle = std::unique_ptr<ft_font, func_wrapper<FT_Done_Face>>;
 using glyph_handle = std::unique_ptr<ft_glyph, func_wrapper<FT_Done_Glyph>>;
 
+std::expected<void, std::string> init_freetype(int size);
+
 struct font_atlas final
 {
-  freetype_handle ft;
   std::string glyphs;
-  std::vector<glyph_handle> ft_glyphs;
   std::vector<glyph_data> data;
   texture_handle texture;
-  font_handle font;
   glm::vec2 dims;
   vbo_handle quad;
   vao_handle vao;
   program_handle program;
 };
 
-std::optional<font_atlas> make_font_atlas(std::string glyphs, int size);
+font_atlas make_font_atlas(std::string glyphs);
 
 struct gl_string final
 {

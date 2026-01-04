@@ -23,6 +23,7 @@
 #include "colors.hpp"
 #include "user_definitions.hpp"
 #include "layout.hpp"
+#include "font_atlas.hpp"
 
 namespace
 {
@@ -76,6 +77,8 @@ static constexpr auto uimain = [](auto commands)
   glEnable(GL_DEPTH_TEST);
 
   init_events(window);
+
+  init_freetype(10);
 
   rxcpp::subjects::subject<unit> frames_subject;
   auto frames = frames_subject.get_observable() | rx::publish() | rx::ref_count();

@@ -119,8 +119,7 @@ coordinate_system_2d::coordinate_system_2d(const tics_desc &tics, uint32_t num_t
     : num_ticks(num_ticks), tick_size(tick_size), bounding_rect(tics.bounding_rect),
       program_for_ticks(make_program_for_ticks()), vao_for_ticks(make_vao()),
       vbo_for_axis(make_vbo()), axis(make_axis(vbo_for_axis, tics)),
-      atlas(*make_font_atlas("0123456789.,+-:abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                             10))
+      atlas(make_font_atlas("0123456789.,+-:abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 {
   const auto steps = (tics.bounding_rect.upper_bounds - tics.bounding_rect.lower_bounds)
                      / static_cast<float>(num_ticks - 1);

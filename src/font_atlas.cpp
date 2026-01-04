@@ -11,6 +11,7 @@
 #include <fontconfig/fontconfig.h>
 #include "program.hpp"
 #include <array>
+#include <unordered_map>
 
 namespace
 {
@@ -92,7 +93,7 @@ auto with_free(T *ptr, F f)
   return std::unique_ptr<T, F>(ptr, f);
 }
 
-std::pair<std::string, bool> preferred_monospace_font()
+std::string preferred_monospace_font()
 {
   auto conf = with_free(FcInitLoadConfigAndFonts(), FcConfigDestroy);
   auto pat = with_free(FcPatternCreate(), FcPatternDestroy);
@@ -109,11 +110,9 @@ std::pair<std::string, bool> preferred_monospace_font()
   }
   FcValue formatVal;
   FcPatternGet(font_patterns->fonts[0], FC_FONTFORMAT, 0, &formatVal);
-  auto format = std::string_view(static_cast<const char *>(formatVal.u.f));
-  auto invert = format != "CFF"; // no idea if this is technically correct, but it works
   FcValue pathVal;
   FcPatternGet(font_patterns->fonts[0], FC_FILE, 0, &pathVal);
-  return {std::string(static_cast<const char *>(pathVal.u.f)), invert};
+  return std::string(static_cast<const char *>(pathVal.u.f));
 }
 
 auto init_ft()
@@ -144,111 +143,138 @@ for (auto j = 0u; j < dimy; ++j)
 }
 
 */
+
+struct ft_state_t
+{
+  freetype_handle ft = {};
+  font_handle font = {};
+  std::unordered_map<char, glyph_handle> glyphs = {};
+  int size = {};
+} ft_state;
+
 } // namespace
 
 namespace explot
 {
 
-std::optional<font_atlas> make_font_atlas(std::string glyphs, int size)
+std::expected<void, std::string> init_freetype(int size)
 {
-  const auto [path, invert] = preferred_monospace_font();
+  if (ft_state.ft)
+  {
+    return {};
+  }
+
+  ft_state.ft = init_ft();
+  if (!ft_state.ft)
+  {
+    return std::unexpected("Failed to initialize freetype.");
+  }
+
+  const auto path = preferred_monospace_font();
   if (path.empty())
   {
-    return std::nullopt;
+    return std::unexpected("Could not find any font.");
   }
-  auto ft = init_ft();
-  if (ft)
+
+  ft_state.font = load_face(ft_state.ft.get(), path.c_str());
+  if (!ft_state.font)
   {
-    auto font = load_face(ft.get(), path.c_str());
-    if (font)
-    {
-      auto shapes = std::vector<glyph_handle>();
-      shapes.reserve(glyphs.size());
-      auto glyphs_data = std::vector<glyph_data>();
-      glyphs_data.reserve(glyphs.size());
-      auto width = 0;
-      auto height = 0;
-      auto error = FT_Set_Char_Size(font.get(), 0, size << 6, 0, 96);
-      if (error)
-      {
-        fmt::println("error in set char size");
-      }
-      for (auto i = 0ULL; i < glyphs.size(); ++i)
-      {
-        auto glyph_index = FT_Get_Char_Index(font.get(), FT_ULong(glyphs[i]));
-        FT_Load_Glyph(font.get(), glyph_index, FT_LOAD_DEFAULT);
-        FT_Glyph g;
-        FT_Get_Glyph(font->glyph, &g);
-        FT_Glyph_To_Bitmap(&g, FT_RENDER_MODE_NORMAL, 0, 1);
-        shapes.emplace_back(g);
-        auto bitmap = (FT_BitmapGlyph)shapes[i].get();
-        glyphs_data.emplace_back(glm::vec2(width, 0),
-                                 glm::vec2(width + int(bitmap->bitmap.width), bitmap->bitmap.rows));
-        auto box = FT_BBox{};
-        FT_Glyph_Get_CBox(shapes[i].get(), ft_glyph_bbox_pixels, &box);
-        auto fbox = FT_BBox{};
-        FT_Glyph_Get_CBox(shapes[i].get(), ft_glyph_bbox_gridfit, &fbox);
-        width += bitmap->bitmap.width;
-        height = std::max(height, static_cast<int>(bitmap->bitmap.rows));
-      }
-      // rendered text is garbled, if width is not a multiple of 4
-      // I guess that rounding errors are the reason.
-      // This feels more like a workaround than a fix though
-      if (width & 3)
-      {
-        width += 4 - (width & 3);
-      }
-      auto tex_data = std::make_unique<unsigned char[]>(static_cast<std::size_t>(width)
-                                                        * static_cast<std::size_t>(height));
-      auto dims = glm::vec2(width, height);
-      auto start_column = 0u;
-      for (auto i = 0ULL; i < glyphs.size(); ++i)
-      {
-        auto bitmap = (FT_BitmapGlyph)shapes[i].get();
-        for (auto row = 0u; row < bitmap->bitmap.rows; ++row)
-        {
-          std::memcpy(tex_data.get() + (int(row) * width + int(start_column)),
-                      bitmap->bitmap.buffer
-                          + (bitmap->bitmap.rows - row - 1) * bitmap->bitmap.width,
-                      bitmap->bitmap.width);
-        }
-        start_column += bitmap->bitmap.width;
-      }
-
-      auto tex = make_texture();
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_RECTANGLE, tex);
-      const auto border_color = glm::vec4(0);
-      glTexParameterfv(GL_TEXTURE_RECTANGLE, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(border_color));
-      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-      glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-      glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE,
-                   tex_data.get());
-      glFinish();
-
-      auto quad = make_tex_vbo();
-      auto vao = make_vao();
-      glBindVertexArray(vao);
-      glBindBuffer(GL_ARRAY_BUFFER, quad);
-      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-      glEnableVertexAttribArray(0);
-      return font_atlas{.ft = std::move(ft),
-                        .glyphs = std::move(glyphs),
-                        .ft_glyphs = std::move(shapes),
-                        .data = std::move(glyphs_data),
-                        .texture = std::move(tex),
-                        .font = std::move(font),
-                        .dims = {width, height},
-                        .quad = std::move(quad),
-                        .vao = std::move(vao),
-                        .program = make_atlas_program()};
-    }
+    return std::unexpected("Failed to load font");
   }
-  fmt::print("failed make font atlas\n");
-  return std::nullopt;
+
+  ft_state.size = size;
+
+  return {};
+}
+
+font_atlas make_font_atlas(std::string glyphs)
+{
+  assert(ft_state.ft);
+  auto font = ft_state.font.get();
+  assert(font);
+  auto glyphs_data = std::vector<glyph_data>();
+  glyphs_data.reserve(glyphs.size());
+  auto width = 0;
+  auto height = 0;
+  auto error = FT_Set_Char_Size(font, 0, ft_state.size << 6, 0, 96);
+  if (error)
+  {
+    fmt::println("error in set char size");
+  }
+  for (auto i = 0ULL; i < glyphs.size(); ++i)
+  {
+    FT_Glyph g;
+    if (auto stored_glyph = ft_state.glyphs.find(glyphs[i]); stored_glyph != ft_state.glyphs.end())
+    {
+      g = stored_glyph->second.get();
+    }
+    else
+    {
+      auto glyph_index = FT_Get_Char_Index(font, FT_ULong(glyphs[i]));
+      assert(glyph_index > 0);
+      FT_Load_Glyph(font, glyph_index, FT_LOAD_DEFAULT);
+      FT_Get_Glyph(font->glyph, &g);
+      FT_Glyph_To_Bitmap(&g, FT_RENDER_MODE_NORMAL, 0, 1);
+      ft_state.glyphs[glyphs[i]] = glyph_handle(g);
+    }
+
+    auto bitmap = (FT_BitmapGlyph)g;
+    glyphs_data.emplace_back(glm::vec2(width, 0),
+                             glm::vec2(width + int(bitmap->bitmap.width), bitmap->bitmap.rows));
+
+    width += bitmap->bitmap.width;
+    height = std::max(height, static_cast<int>(bitmap->bitmap.rows));
+  }
+  // rendered text is garbled, if width is not a multiple of 4
+  // I guess that rounding errors are the reason.
+  // This feels more like a workaround than a fix though
+  if (width & 3)
+  {
+    width += 4 - (width & 3);
+  }
+  auto tex_data = std::make_unique<unsigned char[]>(static_cast<std::size_t>(width)
+                                                    * static_cast<std::size_t>(height));
+  auto dims = glm::vec2(width, height);
+  auto start_column = 0u;
+  for (auto i = 0ULL; i < glyphs.size(); ++i)
+  {
+    auto bitmap = (FT_BitmapGlyph)ft_state.glyphs[glyphs[i]].get();
+    for (auto row = 0u; row < bitmap->bitmap.rows; ++row)
+    {
+      std::memcpy(tex_data.get() + (int(row) * width + int(start_column)),
+                  bitmap->bitmap.buffer + (bitmap->bitmap.rows - row - 1) * bitmap->bitmap.width,
+                  bitmap->bitmap.width);
+    }
+    start_column += bitmap->bitmap.width;
+  }
+
+  auto tex = make_texture();
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_RECTANGLE, tex);
+  const auto border_color = glm::vec4(0);
+  glTexParameterfv(GL_TEXTURE_RECTANGLE, GL_TEXTURE_BORDER_COLOR, glm::value_ptr(border_color));
+  glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_RECTANGLE, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE,
+               tex_data.get());
+  glFinish();
+
+  auto quad = make_tex_vbo();
+  auto vao = make_vao();
+  glBindVertexArray(vao);
+  glBindBuffer(GL_ARRAY_BUFFER, quad);
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+  glEnableVertexAttribArray(0);
+  return font_atlas{.glyphs = std::move(glyphs),
+                    .data = std::move(glyphs_data),
+                    .texture = std::move(tex),
+                    .dims = {width, height},
+                    .quad = std::move(quad),
+                    .vao = std::move(vao),
+                    .program = make_atlas_program()};
 }
 
 gl_string::gl_string(const font_atlas &atlas, std::string_view str, const glm::vec4 &color)
@@ -256,6 +282,7 @@ gl_string::gl_string(const font_atlas &atlas, std::string_view str, const glm::v
       screen_coordinates(make_vbo()), tex_vbo(make_tex_vbo()), texture(atlas.texture),
       program(make_string_program())
 {
+  assert(ft_state.ft);
   glBindVertexArray(vao);
   auto uv_coords = std::make_unique<glm::vec2[]>(2 * str.size());
   auto screen_coords = std::make_unique<glm::vec2[]>(2 * str.size());
@@ -263,16 +290,17 @@ gl_string::gl_string(const font_atlas &atlas, std::string_view str, const glm::v
   auto y_lower_bound = std::numeric_limits<float>::max();
   auto y_upper_bound = std::numeric_limits<float>::lowest();
   auto previous = 0u;
-  auto has_kerning = FT_HAS_KERNING(atlas.font.get());
+  auto font = ft_state.font.get();
+  auto has_kerning = FT_HAS_KERNING(font);
   for (auto i = 0ULL; i < str.size(); ++i)
   {
     auto idx = static_cast<std::size_t>(
         std::distance(std::begin(atlas.glyphs),
                       std::find(std::begin(atlas.glyphs), std::end(atlas.glyphs), str[i])));
-    auto glyph_index = FT_Get_Char_Index(atlas.font.get(), FT_ULong(str[i]));
+    auto glyph_index = FT_Get_Char_Index(font, FT_ULong(str[i]));
     assert(idx < atlas.glyphs.size());
     assert(glyph_index > 0);
-    auto bitmap = (FT_BitmapGlyph)atlas.ft_glyphs[idx].get();
+    auto bitmap = (FT_BitmapGlyph)ft_state.glyphs[str[i]].get();
     const auto &uv_lower_bounds = atlas.data[idx].uv_lb;
     const auto uv_dimensions = atlas.data[idx].uv_ub - atlas.data[idx].uv_lb;
     static_assert(sizeof(glm::vec2) == 2 * sizeof(float));
@@ -281,7 +309,7 @@ gl_string::gl_string(const font_atlas &atlas, std::string_view str, const glm::v
     if (i > 0 && has_kerning)
     {
       FT_Vector kerning = {0, 0};
-      FT_Get_Kerning(atlas.font.get(), previous, glyph_index, FT_KERNING_DEFAULT, &kerning);
+      FT_Get_Kerning(font, previous, glyph_index, FT_KERNING_DEFAULT, &kerning);
       width += static_cast<float>(kerning.x >> 6);
     }
     const auto screen_lower_bounds =

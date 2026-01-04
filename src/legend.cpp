@@ -58,7 +58,7 @@ namespace explot
 {
 
 legend::legend(std::span<const graph_desc_2d> graphs)
-    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
+    : font(make_font_atlas(glyphs_for_graphs(graphs)))
 {
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
@@ -84,7 +84,7 @@ legend::legend(std::span<const graph_desc_2d> graphs)
 }
 
 legend::legend(std::span<const graph_desc_3d> graphs)
-    : font(make_font_atlas(glyphs_for_graphs(graphs), 10).value())
+    : font(make_font_atlas(glyphs_for_graphs(graphs)))
 {
   titles.reserve(graphs.size());
   colors.reserve(graphs.size());
