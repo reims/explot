@@ -24,6 +24,9 @@
 #include "user_definitions.hpp"
 #include "layout.hpp"
 #include "font_atlas.hpp"
+#include <fstream>
+#include <algorithm>
+#include <cctype>
 
 namespace
 {
@@ -147,6 +150,130 @@ static constexpr auto uimain = [](auto commands)
   thread_running.store(false);
 };
 
+std::expected<bool, std::string> load_file(const std::filesystem::path &path,
+                                           const rx::subjects::subject<command> &cmd_subject,
+                                           std::optional<std::jthread> &uithread);
+
+std::expected<bool, std::string> handle_line(std::string_view line,
+                                             const rx::subjects::subject<command> &cmd_subject,
+                                             std::optional<std::jthread> &uithread)
+{
+  auto result = parse_command(line);
+  auto cmd_subscriber = cmd_subject.get_subscriber();
+  auto cmd_observable = cmd_subject.get_observable();
+  return result.and_then(
+      [&](const command &cmd) -> std::expected<bool, std::string>
+      {
+        if (std::holds_alternative<explot::quit_command>(cmd))
+        {
+          cmd_subscriber.on_next(cmd);
+          return true;
+        }
+        else if (std::holds_alternative<show_command>(cmd))
+        {
+          fmt::print("{}\n", settings::show(std::get<show_command>(cmd)));
+        }
+        else if (std::holds_alternative<set_command>(cmd))
+        {
+          const auto &set_cmd = std::get<set_command>(cmd);
+          settings::set(set_cmd);
+        }
+        else if (std::holds_alternative<unset_command>(cmd))
+        {
+          const auto &unset_cmd = std::get<unset_command>(cmd);
+          settings::unset(unset_cmd);
+        }
+        else if (std::holds_alternative<user_definition>(cmd))
+        {
+          add_definition(std::get<user_definition>(std::move(cmd)));
+        }
+        else if (std::holds_alternative<cd_command>(cmd))
+        {
+          std::filesystem::current_path(std::get<cd_command>(cmd).path);
+        }
+        else if (std::holds_alternative<pwd_command>(cmd))
+        {
+          auto wd = std::filesystem::current_path().string();
+          fmt::println("{}", wd);
+        }
+        else if (std::holds_alternative<load_command>(cmd))
+        {
+          auto result = load_file(std::get<load_command>(cmd).path, cmd_subject, uithread);
+          if (!result.has_value() || *result)
+          {
+            return result;
+          }
+        }
+        else
+        {
+          if (!thread_running.load())
+          {
+            uithread = std::jthread(uimain, cmd_observable);
+            thread_running.store(true);
+            ready_for_cmds.acquire();
+          }
+          cmd_subscriber.on_next(cmd);
+        }
+        return false;
+      });
+}
+
+std::expected<bool, std::string> load_file(const std::filesystem::path &path,
+                                           const rx::subjects::subject<command> &cmd_subject,
+                                           std::optional<std::jthread> &uithread)
+{
+  auto f = std::ifstream(path);
+  if (!f.is_open())
+  {
+    return std::unexpected("Failed to open file.");
+  }
+
+  static constexpr auto buffer_size = 1uz << 16;
+  auto buffer = std::make_unique_for_overwrite<char[]>(buffer_size);
+  auto offset = 0z;
+  auto c = buffer.get();
+  auto start_of_line = c;
+  auto line_num = 1uz;
+  while (!f.eof() && !f.fail())
+  {
+    f.read(buffer.get() + offset, static_cast<std::streamsize>(buffer_size) - offset - 1);
+    c = buffer.get();
+    start_of_line = c;
+    auto read = f.gcount();
+    auto end = c + read;
+    for (; c != end; ++c)
+    {
+      if (*c == '\n')
+      {
+        auto result = handle_line({start_of_line, c}, cmd_subject, uithread);
+        if (!result.has_value() || *result)
+        {
+          return result.transform_error(
+              [&](const std::string &e)
+              { return fmt::format("{}:{}: {}", path.c_str(), line_num, e); });
+        }
+
+        start_of_line = c + 1;
+      }
+    }
+    offset = c - start_of_line;
+    std::memmove(buffer.get(), start_of_line, static_cast<size_t>(offset));
+    ++line_num;
+  }
+  if (!std::all_of(start_of_line, c, [](char cc) { return std::isspace(cc); }))
+  {
+    auto result = handle_line({start_of_line, c}, cmd_subject, uithread);
+    if (!result.has_value() || *result)
+    {
+      return result.transform_error(
+          [&](const std::string &e)
+          { return fmt::format("{}:{}: {}", path.c_str(), line_num, e); });
+    }
+  }
+
+  return false;
+}
+
 std::filesystem::path get_data_dir()
 {
   const auto data_dir_ptr = std::getenv("XDG_DATA_HOME");
@@ -208,7 +335,6 @@ void save_history(const std::filesystem::path &history_path)
 int main()
 {
   auto cmd_subject = rx::subjects::subject<explot::command>();
-  auto cmd_subscriber = cmd_subject.get_subscriber();
 
   const auto data_dir = get_data_dir();
   const auto history_path = data_dir / "history";
@@ -220,55 +346,17 @@ int main()
        line_ptr.reset(readnextline("> ")))
   {
     add_to_history(line_ptr.get());
-    auto cmd = explot::parse_command(line_ptr.get());
-    if (cmd.has_value())
+    auto result = handle_line(line_ptr.get(), cmd_subject, uithread);
+    if (result.has_value())
     {
-      if (std::holds_alternative<explot::quit_command>(cmd.value()))
+      if (*result)
       {
-        cmd_subscriber.on_next(cmd.value());
         break;
-      }
-      else if (std::holds_alternative<show_command>(cmd.value()))
-      {
-        fmt::print("{}\n", settings::show(std::get<show_command>(cmd.value())));
-      }
-      else if (std::holds_alternative<set_command>(cmd.value()))
-      {
-        const auto &set_cmd = std::get<set_command>(cmd.value());
-        settings::set(set_cmd);
-      }
-      else if (std::holds_alternative<unset_command>(cmd.value()))
-      {
-        const auto &unset_cmd = std::get<unset_command>(cmd.value());
-        settings::unset(unset_cmd);
-      }
-      else if (std::holds_alternative<user_definition>(cmd.value()))
-      {
-        add_definition(std::get<user_definition>(std::move(cmd.value())));
-      }
-      else if (std::holds_alternative<cd_command>(cmd.value()))
-      {
-        std::filesystem::current_path(std::get<cd_command>(cmd.value()).path);
-      }
-      else if (std::holds_alternative<pwd_command>(cmd.value()))
-      {
-        auto wd = std::filesystem::current_path().string();
-        fmt::println("{}", wd);
-      }
-      else
-      {
-        if (!thread_running.load())
-        {
-          uithread = std::jthread(uimain, cmd_subject.get_observable());
-          thread_running.store(true);
-          ready_for_cmds.acquire();
-        }
-        cmd_subscriber.on_next(cmd.value());
       }
     }
     else
     {
-      fmt::println("error: {}", cmd.error());
+      fmt::println("error: {}", result.error());
     }
   }
   save_history(history_path);

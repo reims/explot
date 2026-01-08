@@ -66,7 +66,10 @@ Then `explot` should build and run as usually.
 - [x] User-defined functions and variables
 - [x] Multiplot Only simple layouts for now. Setting size and position
   manually for plots is not implemented yet.
-- [ ] Load files
+- [x] Load command
+  - [x] files
+  - [ ] stdin
+  - [ ] shell commands
 - [ ] Piped data
 - [ ] Binary data
 - Plotting styles:

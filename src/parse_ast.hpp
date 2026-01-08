@@ -133,8 +133,9 @@ struct plot_command_3d final
   range_setting u_range;
   range_setting v_range;
 };
-using command = std::variant<plot_command_2d, plot_command_3d, user_definition, set_command,
-                             quit_command, unset_command, show_command, cd_command, pwd_command>;
+using command =
+    std::variant<plot_command_2d, plot_command_3d, user_definition, set_command, quit_command,
+                 unset_command, show_command, cd_command, pwd_command, load_command>;
 
 } // namespace ast
 

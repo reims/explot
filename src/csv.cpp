@@ -49,11 +49,12 @@ void read_csv_impl(std::ifstream &f, char delim, auto handle_field, auto handle_
     auto offset = 0z;
     while (!(f.eof() || f.bad()))
     {
-      std::memset(buffer.get() + offset, 0, static_cast<std::size_t>(buffer_size - offset));
       f.read(buffer.get() + offset, buffer_size - offset - 1z);
+      auto read = f.gcount();
       auto c = buffer.get();
       auto start_of_field = c;
-      while (*c != '\0')
+      auto end = c + read;
+      for (; c != end; ++c)
       {
         if (*c == delim)
         {
@@ -62,17 +63,16 @@ void read_csv_impl(std::ifstream &f, char delim, auto handle_field, auto handle_
         }
         else if (*c == '\n')
         {
-          if (!std::all_of(start_of_field, c, [](unsigned char c) { return std::isspace(c); }))
+          if (!std::all_of(start_of_field, c, [](char c) { return std::isspace(c); }))
           {
             handle_field(start_of_field, c);
           }
           start_of_field = c + 1;
           handle_end_of_line();
         }
-        c++;
       }
       offset = c - start_of_field;
-      std::memcpy(buffer.get(), start_of_field, static_cast<std::size_t>(offset));
+      std::memmove(buffer.get(), start_of_field, static_cast<std::size_t>(offset));
     }
   }
 }

@@ -318,8 +318,14 @@ struct pwd_command
 {
 };
 
-using command = std::variant<quit_command, plot_command_2d, plot_command_3d, user_definition,
-                             set_command, show_command, unset_command, cd_command, pwd_command>;
+struct load_command
+{
+  std::filesystem::path path;
+};
+
+using command =
+    std::variant<quit_command, plot_command_2d, plot_command_3d, user_definition, set_command,
+                 show_command, unset_command, cd_command, pwd_command, load_command>;
 
 inline bool is_quit_command(const command &cmd)
 {

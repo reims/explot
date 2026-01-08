@@ -1,6 +1,5 @@
 #include "parse_commands.hpp"
 #include <expected>
-#include <string_view>
 #include <cassert>
 #include <fmt/format.h>
 #include <type_traits>
@@ -636,9 +635,8 @@ std::expected<set_command, std::string> validate(set_command &&cmd)
 
 namespace explot
 {
-std::expected<command, std::string> parse_command(const char *cmd)
+std::expected<command, std::string> parse_command(std::string_view line)
 {
-  auto line = std::string_view(cmd);
   if (auto ast = parse_command_ast(line); ast)
   {
     return std::visit(
@@ -657,6 +655,8 @@ std::expected<command, std::string> parse_command(const char *cmd)
             { return std::move(cmd); },
             [](cd_command &&cmd) -> std::expected<command, std::string> { return std::move(cmd); },
             [](pwd_command &&cmd) -> std::expected<command, std::string> { return std::move(cmd); },
+            [](load_command &&cmd) -> std::expected<command, std::string>
+            { return std::move(cmd); },
             [](ast::user_definition &&cmd) -> std::expected<command, std::string>
             {
               const auto params =

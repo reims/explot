@@ -4,5 +4,5 @@
 
 namespace explot
 {
-std::expected<command, std::string> parse_command(const char *cmd);
+std::expected<command, std::string> parse_command(std::string_view line);
 } // namespace explot

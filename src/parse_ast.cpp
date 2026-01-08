@@ -1044,18 +1044,22 @@ struct pwd
   static constexpr auto value = lexy::constant(pwd_command{});
 };
 
+struct load
+{
+  static constexpr auto rule = dsl::p<string>;
+  static constexpr auto value = lexy::as_string<std::string> >> lexy::construct<
+                                    std::filesystem::path> >> lexy::construct<load_command>;
+};
+
 struct command_ast
 {
   static constexpr auto whitespace = dsl::ascii::space;
-  static constexpr auto rule = dsl::keyword<"plot">(kw_id) >> dsl::p<plot>
-                               | dsl::keyword<"splot">(kw_id) >> dsl::p<splot>
-                               | dsl::keyword<"set">(kw_id) >> dsl::p<set>
-                               | dsl::keyword<"unset">(kw_id) >> dsl::p<unset>
-                               | dsl::keyword<"show">(kw_id) >> dsl::p<show>
-                               | dsl::keyword<"cd">(kw_id) >> dsl::p<cd>
-                               | dsl::keyword<"pwd">(kw_id) >> dsl::p<pwd>
-                               | dsl::keyword<"quit">(kw_id) >> dsl::p<quit>
-                               | dsl::else_ >> dsl::p<user_definition>;
+  static constexpr auto rule =
+      dsl::keyword<"plot">(kw_id) >> dsl::p<plot> | dsl::keyword<"splot">(kw_id) >> dsl::p<splot>
+      | dsl::keyword<"set">(kw_id) >> dsl::p<set> | dsl::keyword<"unset">(kw_id) >> dsl::p<unset>
+      | dsl::keyword<"show">(kw_id) >> dsl::p<show> | dsl::keyword<"cd">(kw_id) >> dsl::p<cd>
+      | dsl::keyword<"pwd">(kw_id) >> dsl::p<pwd> | dsl::keyword<"quit">(kw_id) >> dsl::p<quit>
+      | dsl::keyword<"load">(kw_id) >> dsl::p<load> | dsl::else_ >> dsl::p<user_definition>;
   static constexpr auto value = lexy::construct<ast::command>;
 };
 
