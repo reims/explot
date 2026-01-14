@@ -6,7 +6,6 @@
 #include <glm/glm.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include "coordinate_system_2d.hpp"
 #include <fmt/format.h>
 
 namespace
@@ -30,6 +29,13 @@ const T &const_get(const rx::resource<T> &res)
   return const_cast<rx::resource<T> &>(res).get();
 }
 
+void set_viewport(const rect &r)
+{
+  glViewport(static_cast<GLint>(r.lower_bounds.x), static_cast<GLint>(r.lower_bounds.y),
+             static_cast<GLsizei>(r.upper_bounds.x - r.lower_bounds.x),
+             static_cast<GLsizei>(r.upper_bounds.y - r.lower_bounds.y));
+}
+
 } // namespace
 
 namespace explot
@@ -44,26 +50,24 @@ rx::observable<unit> plot_renderer(rx::observe_on_one_worker &on_run_loop,
              [=](rx::resource<plot_with_view_space> res)
              {
                auto ds = drags(screen_space, part).publish().ref_count();
-               auto drops = ds.transform([](auto d) { return d.default_if_empty(drag{}).last(); })
-                                .concat()
-                                .filter([](const drag &d) { return d.from != d.to; });
-               auto local_screen = screen_space.transform(
-                   [=](const rect &screen)
-                   {
-                     auto local = part_of(screen, part);
-                     // fmt::println("rel screen: [{}, {}]x[{}, {}], local: [{}, {}]x[{}, {}],
-                     // whole: "
-                     //              "[{}, {}]x[{}, {}]",
-                     //              part.lower_bounds.x, part.upper_bounds.x, part.lower_bounds.y,
-                     //              part.upper_bounds.y, local.lower_bounds.x,
-                     //              local.upper_bounds.x, local.lower_bounds.y,
-                     //              local.upper_bounds.y, screen.lower_bounds.x,
-                     //              screen.upper_bounds.x, screen.lower_bounds.y,
-                     //              screen.upper_bounds.y);
-                     return local;
-                   });
-               auto view_space_obs =
-                   const_get(res).view_space.get_observable() | rx::publish() | rx::ref_count();
+               auto drops =
+                   ds | rx::transform([](auto d) { return d.default_if_empty(drag{}).last(); })
+                   | rx::concat() | rx::filter([](const drag &d) { return d.from != d.to; });
+               auto local_screen = screen_space
+                                   | rx::transform(
+                                       [=](const rect &screen)
+                                       {
+                                         auto local = part_of(screen, part);
+                                         return local;
+                                       });
+               static constexpr auto lower_margin = glm::vec3(100.0f, 50.0f, 0.0f);
+               static constexpr auto upper_margin = glm::vec3(50.0f, 20.0f, 0.0f);
+               auto plot_screen =
+                   local_screen
+                   | rx::transform([](const rect &screen)
+                                   { return remove_margin(screen, lower_margin, upper_margin); });
+
+               auto view_space_obs = const_get(res).view_space.get_observable();
                auto selections = drops
                                  | rx::with_latest_from(
                                      [](const drag &r, const rect &screen, const rect &view)
@@ -71,29 +75,14 @@ rx::observable<unit> plot_renderer(rx::observe_on_one_worker &on_run_loop,
                                        auto screen_to_view = transform(screen, view);
                                        return transform(drag_to_rect(r), screen_to_view);
                                      },
-                                     local_screen, view_space_obs)
-                                 | rx::publish() | rx::ref_count();
+                                     plot_screen, view_space_obs);
                auto resets = key_presses() | rx::filter([](int key) { return key == GLFW_KEY_A; })
-                             | rx::transform([phase_space = round_for_ticks_2d(
-                                                  const_get(res).plot.phase_space, 5, 2)](int)
+                             | rx::transform([phase_space = const_get(res).plot.phase_space](int)
                                              { return phase_space; });
                auto phase_space =
-                   selections
-                   | rx::transform([](const rect &r) { return round_for_ticks_2d(r, 5, 2); })
-                   | rx::merge(resets)
-                   | rx::start_with(round_for_ticks_2d(const_get(res).plot.phase_space, 5, 2));
-               auto view_space = phase_space
-                                 | rx::transform([](const tics_desc &r)
-                                                 { return scale2d(r.bounding_rect, 1.1f); });
-               auto sub = view_space.subscribe(const_get(res).view_space.get_subscriber());
-               auto coordinate_systems =
-                   phase_space | rx::observe_on(on_run_loop)
-                   | rx::transform(
-                       [timebase = const_get(res).plot.timebase](const tics_desc &r)
-                       {
-                         return std::make_shared<coordinate_system_2d>(r, 5, 9.0f, 2.0f, timebase);
-                       })
-                   | rx::publish() | rx::ref_count();
+                   selections | rx::merge(resets) | rx::start_with(const_get(res).plot.phase_space);
+
+               auto sub = phase_space.subscribe(const_get(res).view_space.get_subscriber());
                auto drag_renderer =
                    ds
                    | rx::transform(
@@ -112,13 +101,7 @@ rx::observable<unit> plot_renderer(rx::observe_on_one_worker &on_run_loop,
                                                  [res = std::move(res)](unit, const drag &d,
                                                                         const rect &r)
                                                  {
-                                                   glViewport(
-                                                       static_cast<GLint>(r.lower_bounds.x),
-                                                       static_cast<GLint>(r.lower_bounds.y),
-                                                       static_cast<GLsizei>(r.upper_bounds.x
-                                                                            - r.lower_bounds.x),
-                                                       static_cast<GLsizei>(r.upper_bounds.y
-                                                                            - r.lower_bounds.y));
+                                                   set_viewport(r);
                                                    draw(const_get(res), drag_to_rect(d), r);
                                                    return unit{};
                                                  },
@@ -128,36 +111,30 @@ rx::observable<unit> plot_renderer(rx::observe_on_one_worker &on_run_loop,
                        })
                    | rx::switch_on_next();
 
-               auto updates = view_space.combine_latest(local_screen)
-                                  .observe_on(on_run_loop)
-                                  .with_latest_from(
-                                      [res](const std::tuple<rect, rect> &views,
-                                            const std::shared_ptr<coordinate_system_2d> &cs)
-                                      {
-                                        auto &[view, screen] = views;
-                                        update(const_get(res).plot, screen, view);
-                                        auto transforms = transforms_2d{
-                                            .phase_to_screen = transform(view, screen),
-                                            .screen_to_clip = transform(screen, clip_rect)};
-                                        update(*cs, transforms);
-                                        return unit{};
-                                      },
-                                      coordinate_systems);
+               auto view_updates = phase_space.observe_on(on_run_loop)
+                                       .transform(
+                                           [res](const rect &view) mutable
+                                           {
+                                             update_view(res.get().plot, view);
+                                             return unit{};
+                                           });
 
+               auto screen_updates = local_screen.transform(
+                   [res](const rect &screen) mutable
+                   {
+                     update_screen(res.get().plot, screen);
+                     return unit{};
+                   });
+
+               auto updates = view_updates | rx::merge(screen_updates);
                return frames | rx::observe_on(on_run_loop)
                       | rx::with_latest_from(
-                          [res](unit, unit, const std::shared_ptr<coordinate_system_2d> &cs,
-                                const rect &r)
+                          [res](unit, unit)
                           {
-                            glViewport(static_cast<GLint>(r.lower_bounds.x),
-                                       static_cast<GLint>(r.lower_bounds.y),
-                                       static_cast<GLsizei>(r.upper_bounds.x - r.lower_bounds.x),
-                                       static_cast<GLsizei>(r.upper_bounds.y - r.lower_bounds.y));
                             draw(const_get(res).plot);
-                            draw(*cs);
                             return unit{};
                           },
-                          updates, coordinate_systems, local_screen)
+                          updates)
                       | rx::merge(drag_renderer);
              })
          | rx::subscribe_on(on_run_loop);
@@ -206,12 +183,12 @@ rx::observable<unit> splot_renderer(rx::observe_on_one_worker &on_run_loop,
                auto updates = rots.combine_latest(local_screen)
                                   .observe_on(on_run_loop)
                                   .transform(
-                                      [res](const std::tuple<glm::mat4, rect> &views)
+                                      [res](const std::tuple<glm::mat4, rect> &views) mutable
                                       {
                                         auto &[rot, screen] = views;
                                         auto dir =
                                             glm::transpose(rot) * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-                                        update(const_get(res), -4.0f * glm::vec3(dir), rot, screen);
+                                        update(res.get(), -4.0f * glm::vec3(dir), rot, screen);
                                         return unit{};
                                       });
                return frames | rx::observe_on(on_run_loop)

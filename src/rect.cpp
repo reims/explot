@@ -133,4 +133,10 @@ std::string format_for_tic(float value, int lsd)
   return fmt::format("{:.{}f}", value, std::max(0, -lsd));
 }
 
+rect remove_margin(const rect &r, const glm::vec3 &lower_margin, const glm::vec3 &upper_margin)
+{
+  return {.lower_bounds = r.lower_bounds + lower_margin,
+          .upper_bounds = r.upper_bounds - upper_margin};
+}
+
 } // namespace explot

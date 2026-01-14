@@ -26,6 +26,6 @@ struct legend
   legend(std::span<const graph_desc_3d> graphs);
 };
 
-void update(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip);
+void update(legend &l, const rect &screen, const glm::mat4 &screen_to_clip);
 void draw(const legend &l);
 } // namespace explot

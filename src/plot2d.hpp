@@ -6,6 +6,7 @@
 #include "commands.hpp"
 #include "legend.hpp"
 #include "csv.hpp"
+#include "coordinate_system_2d.hpp"
 
 namespace explot
 {
@@ -15,9 +16,14 @@ struct plot2d
   rect phase_space;
   std::vector<graph2d> graphs;
   legend legend;
-  time_point timebase;
+  coordinate_system_2d cs;
+  rect screen;
+  rect plot_screen;
+  rect view;
 };
 
-void update(const plot2d &plot, const rect &screen, const rect &view);
+void update_screen(plot2d &plot, const rect &screen);
+void update_view(plot2d &plot, const rect &view);
+
 void draw(const plot2d &plot);
 } // namespace explot

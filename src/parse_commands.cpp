@@ -587,6 +587,7 @@ std::expected<plot_command_2d, std::string> validate(ast::plot_command_2d &&plot
                                    .y_range = plot.y_range,
                                    .t_range = plot.t_range,
                                    .xdata = settings::xdata(),
+                                   .timefmt = settings::timefmt(),
                                    .samples = settings::samples(),
                                    .isosamples = settings::isosamples(),
                                    .separator = settings::datafile::separator()};

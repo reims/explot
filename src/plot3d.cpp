@@ -55,7 +55,7 @@ plot3d::plot3d(const plot_command_3d &cmd)
 {
 }
 
-void update(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,
+void update(plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,
             const rect &screen)
 {
   const auto width = static_cast<float>(screen.upper_bounds.x - screen.lower_bounds.x);

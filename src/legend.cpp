@@ -10,6 +10,7 @@
 #include <ranges>
 #include <fmt/format.h>
 #include "colors.hpp"
+#include <ranges>
 
 namespace
 {
@@ -60,11 +61,11 @@ namespace explot
 legend::legend(std::span<const graph_desc_2d> graphs)
     : font(make_font_atlas(glyphs_for_graphs(graphs)))
 {
-  titles.reserve(graphs.size());
+  titles.resize(graphs.size());
   colors.reserve(graphs.size());
   marks.reserve(graphs.size());
   vbos.reserve(graphs.size());
-  for (const auto &g : graphs)
+  for (const auto &[i, g] : std::views::enumerate(graphs))
   {
     const auto &lt = g.line_type;
     auto &vbo = vbos.emplace_back(make_vbo());
@@ -78,7 +79,7 @@ legend::legend(std::span<const graph_desc_2d> graphs)
       marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lt.width, lt.color));
       break;
     }
-    titles.emplace_back(font, g.title, text_color);
+    update(titles[static_cast<size_t>(i)], g.title, font, text_color);
     colors.push_back(lt.color);
   }
 }
@@ -90,7 +91,7 @@ legend::legend(std::span<const graph_desc_3d> graphs)
   colors.reserve(graphs.size());
   marks.reserve(graphs.size());
   vbos.reserve(graphs.size());
-  for (const auto &g : graphs)
+  for (const auto &[i, g] : std::views::enumerate(graphs))
   {
     auto &vbo = vbos.emplace_back(make_vbo());
     auto &lt = g.line_type;
@@ -107,12 +108,12 @@ legend::legend(std::span<const graph_desc_3d> graphs)
       marks.emplace_back(lines_state_2d(vbo, make_line_data(vbo), lt.width, lt.color));
       break;
     }
-    titles.emplace_back(font, g.title, text_color);
+    update(titles[static_cast<size_t>(i)], g.title, font, text_color);
     colors.push_back(lt.color);
   }
 }
 
-void update(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip)
+void update(legend &l, const rect &screen, const glm::mat4 &screen_to_clip)
 {
   const auto text_width = std::ranges::max(std::views::transform(
       l.titles, [](const gl_string &s) { return s.upper_bounds.x - s.lower_bounds.x; }));
@@ -122,7 +123,7 @@ void update(const legend &l, const rect &screen, const glm::mat4 &screen_to_clip
   assert(l.titles.size() == l.marks.size());
   for (auto i = 0u; i < l.titles.size(); ++i)
   {
-    const auto &s = l.titles[i];
+    auto &s = l.titles[i];
     const auto screen_rect = rect{
         .lower_bounds = {start_of_mark, screen.upper_bounds.y - (i + 1) * text_height - 10, -1.0f},
         .upper_bounds = {start_of_mark + 20.0f, screen.upper_bounds.y - i * text_height - 10,

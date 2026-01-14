@@ -15,7 +15,7 @@ program_handle make_program(const char *geometry_shader_src, const char *vertex_
 
 program_handle make_compute_program(const char *compute_shader_src);
 
-using uniform_value = std::variant<float, glm::vec4, glm::vec2, glm::mat4, uint32_t,
+using uniform_value = std::variant<float, glm::vec4, glm::vec3, glm::vec2, glm::mat4, uint32_t,
                                    std::span<const float>, std::span<const uint32_t>>;
 using uniform = std::pair<const char *, uniform_value>;
 

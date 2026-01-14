@@ -44,19 +44,19 @@ coordinate_system_3d::coordinate_system_3d(const tics_desc &tics, std::uint32_t 
   const auto &br = tics.bounding_rect;
   const auto steps = (br.upper_bounds - br.lower_bounds) / static_cast<float>(num_ticks - 1);
 
-  xlabels.reserve(num_ticks);
-  ylabels.reserve(num_ticks);
-  zlabels.reserve(num_ticks);
+  xlabels.resize(num_ticks);
+  ylabels.resize(num_ticks);
+  zlabels.resize(num_ticks);
   for (auto i = 0u; i < num_ticks; ++i)
   {
     const auto p = br.lower_bounds + static_cast<float>(i) * steps;
-    xlabels.emplace_back(font, format_for_tic(p.x, tics.least_significant_digit_x), text_color);
-    ylabels.emplace_back(font, format_for_tic(p.y, tics.least_significant_digit_y), text_color);
-    zlabels.emplace_back(font, format_for_tic(p.z, tics.least_significant_digit_z), text_color);
+    update(xlabels[i], format_for_tic(p.x, tics.least_significant_digit_x), font, text_color);
+    update(ylabels[i], format_for_tic(p.y, tics.least_significant_digit_y), font, text_color);
+    update(zlabels[i], format_for_tic(p.z, tics.least_significant_digit_z), font, text_color);
   }
 }
 
-void update(const coordinate_system_3d &cs, const transforms_3d &t)
+void update(coordinate_system_3d &cs, const transforms_3d &t)
 {
   const auto num_ticks = cs.xlabels.size();
   const auto step = 2.0f / static_cast<float>(num_ticks - 1);

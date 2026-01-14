@@ -277,13 +277,12 @@ font_atlas make_font_atlas(std::string glyphs)
                     .program = make_atlas_program()};
 }
 
-gl_string::gl_string(const font_atlas &atlas, std::string_view str, const glm::vec4 &color)
-    : size(static_cast<uint32_t>(str.size())), vao(make_vao()), uv_coordinates(make_vbo()),
-      screen_coordinates(make_vbo()), tex_vbo(make_tex_vbo()), texture(atlas.texture),
-      program(make_string_program())
+void update(gl_string &glstr, std::string_view str, const font_atlas &atlas, const glm::vec4 &color)
 {
   assert(ft_state.ft);
-  glBindVertexArray(vao);
+  glBindVertexArray(glstr.vao);
+  glstr.texture = atlas.texture;
+  static constexpr auto elem_size = 2 * sizeof(glm::vec2);
   auto uv_coords = std::make_unique<glm::vec2[]>(2 * str.size());
   auto screen_coords = std::make_unique<glm::vec2[]>(2 * str.size());
   auto width = 0.0f;
@@ -319,34 +318,57 @@ gl_string::gl_string(const font_atlas &atlas, std::string_view str, const glm::v
     width += static_cast<float>(bitmap->root.advance.x >> 16);
     y_lower_bound = std::min(y_lower_bound, screen_lower_bounds.y);
     y_upper_bound = std::max(y_upper_bound, screen_lower_bounds.y + screen_dimensions.y);
-    std::memcpy(&screen_coords[2 * i], &screen_lower_bounds, sizeof(glm::vec2));
-    std::memcpy(&screen_coords[2 * i + 1], &screen_dimensions, sizeof(glm::vec2));
+    screen_coords[2 * i] = screen_lower_bounds;
+    screen_coords[2 * i + 1] = screen_dimensions;
     previous = glyph_index;
   }
-  glBindBuffer(GL_ARRAY_BUFFER, uv_coordinates);
-  glBufferData(GL_ARRAY_BUFFER, 4 * str.size() * sizeof(float), uv_coords.get(), GL_STATIC_DRAW);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+  glBindBuffer(GL_ARRAY_BUFFER, glstr.uv_coordinates);
+  if (glstr.capacity < str.size())
+  {
+    glBufferData(GL_ARRAY_BUFFER, str.size() * elem_size, nullptr, GL_DYNAMIC_DRAW);
+  }
+  glBufferSubData(GL_ARRAY_BUFFER, 0, str.size() * elem_size, uv_coords.get());
+  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, elem_size, nullptr);
   glVertexAttribDivisor(0, 1);
   glEnableVertexAttribArray(0);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, elem_size, (void *)(sizeof(glm::vec2)));
   glVertexAttribDivisor(1, 1);
   glEnableVertexAttribArray(1);
-  glBindBuffer(GL_ARRAY_BUFFER, screen_coordinates);
-  glBufferData(GL_ARRAY_BUFFER, 4 * str.size() * sizeof(float), screen_coords.get(),
-               GL_STATIC_DRAW);
-  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+  glBindBuffer(GL_ARRAY_BUFFER, glstr.screen_coordinates);
+  if (glstr.capacity < str.size())
+  {
+    glBufferData(GL_ARRAY_BUFFER, str.size() * elem_size, nullptr, GL_DYNAMIC_DRAW);
+  }
+  glBufferSubData(GL_ARRAY_BUFFER, 0, str.size() * elem_size, screen_coords.get());
+  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, elem_size, nullptr);
   glVertexAttribDivisor(2, 1);
   glEnableVertexAttribArray(2);
-  glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void *)(2 * sizeof(float)));
+  glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, elem_size, (void *)(sizeof(glm::vec2)));
   glVertexAttribDivisor(3, 1);
   glEnableVertexAttribArray(3);
-  glBindBuffer(GL_ARRAY_BUFFER, tex_vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, glstr.tex_vbo);
   glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
   glEnableVertexAttribArray(4);
-  lower_bounds = glm::vec2(0.0f, y_lower_bound);
-  upper_bounds = glm::vec2(width, y_upper_bound);
-  glUseProgram(program);
-  glUniform4fv(glGetUniformLocation(program, "color"), 1, glm::value_ptr(color));
+  glstr.lower_bounds = glm::vec2(0.0f, y_lower_bound);
+  glstr.upper_bounds = glm::vec2(width, y_upper_bound);
+  glstr.size = static_cast<uint32_t>(str.size());
+  glstr.capacity = glstr.size;
+  glUseProgram(glstr.program);
+  glUniform4fv(glGetUniformLocation(glstr.program, "color"), 1, glm::value_ptr(color));
+  const auto offset2 = glm::vec2(glstr.offset);
+  const auto offset_with_anchor =
+      glm::vec3(glm::floor(offset2 - glstr.anchor * glstr.upper_bounds
+                           - (1.0f - glstr.anchor) * glstr.lower_bounds),
+                glstr.offset.z);
+  auto uf = uniform("offset", offset_with_anchor);
+  set_uniforms(glstr.program, {&uf, 1});
+}
+
+gl_string::gl_string()
+    : size(0), capacity(0), vao(make_vao()), uv_coordinates(make_vbo()),
+      screen_coordinates(make_vbo()), tex_vbo(make_tex_vbo()), texture(0),
+      program(make_string_program())
+{
 }
 
 void draw(const gl_string &str)
@@ -358,10 +380,12 @@ void draw(const gl_string &str)
   glDrawArraysInstanced(GL_TRIANGLES, 0, num_points, str.size);
 }
 
-void update(const gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor,
+void update(gl_string &str, const glm::vec3 &offset, const glm::vec2 &anchor,
             const glm::mat4 &screen_to_clip)
 {
-  const auto offset2 = glm::vec2(offset.x, offset.y);
+  str.offset = offset;
+  str.anchor = anchor;
+  const auto offset2 = glm::vec2(str.offset);
   const auto offset_with_anchor = glm::vec3(
       glm::floor(offset2 - anchor * str.upper_bounds - (1.0f - anchor) * str.lower_bounds),
       offset.z);

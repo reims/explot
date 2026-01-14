@@ -105,13 +105,14 @@ void set_uniforms(gl_id program, std::span<const uniform> uniforms)
   for (auto &uniform : uniforms)
   {
     auto loc = glGetUniformLocation(program, uniform.first);
-    std::visit(overload([=](float f) { glUniform1f(loc, f); },
-                        [=](uint32_t i) { glUniform1ui(loc, i); }, [=](const glm::vec4 &v)
-                        { glUniform4fv(loc, 1, glm::value_ptr(v)); }, [=](const glm::vec2 &v)
-                        { glUniform2fv(loc, 1, glm::value_ptr(v)); }, [=](const glm::mat4 &m)
+    std::visit(overload([&](float f) { glUniform1f(loc, f); },
+                        [&](uint32_t i) { glUniform1ui(loc, i); }, [&](const glm::vec4 &v)
+                        { glUniform4fv(loc, 1, glm::value_ptr(v)); }, [&](const glm::vec3 &v)
+                        { glUniform3fv(loc, 1, glm::value_ptr(v)); }, [&](const glm::vec2 &v)
+                        { glUniform2fv(loc, 1, glm::value_ptr(v)); }, [&](const glm::mat4 &m)
                         { glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(m)); },
-                        [=](std::span<const float> s) { glUniform1fv(loc, s.size(), s.data()); },
-                        [=](std::span<const uint32_t> s)
+                        [&](std::span<const float> s) { glUniform1fv(loc, s.size(), s.data()); },
+                        [&](std::span<const uint32_t> s)
                         { glUniform1uiv(loc, s.size(), s.data()); }),
                uniform.second);
   }

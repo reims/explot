@@ -28,6 +28,7 @@ constexpr rect clip_rect = rect{.lower_bounds = glm::vec3(-1.0f, -1.0f, -1.0f),
 
 glm::mat4 transform(const rect &from, const rect &to);
 rect scale2d(const rect &r, float s);
+rect remove_margin(const rect &r, const glm::vec3 &lower_margin, const glm::vec3 &upper_margin);
 rect transform(const rect &r, const glm::mat4 &m);
 tics_desc round_for_ticks_2d(const rect &r, int num_ticks, int digits);
 tics_desc round_for_ticks_3d(const rect &r, int num_ticks, int digits);

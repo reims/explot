@@ -141,6 +141,7 @@ struct plot_command_2d final
   range_setting y_range;
   range_setting t_range;
   data_type xdata;
+  std::string timefmt;
   samples_setting samples;
   samples_setting isosamples;
   char separator;

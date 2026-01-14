@@ -19,7 +19,7 @@ struct plot3d final
   legend legend;
 };
 
-void update(const plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,
+void update(plot3d &plot, const glm::vec3 &view_origin, const glm::mat4 &view_rotation,
             const rect &screen);
 void draw(const plot3d &plot);
 } // namespace explot
