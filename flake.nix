@@ -11,10 +11,10 @@
         devShell.${system}= pkgs.mkShell
           {
             nativeBuildInputs = with pkgs; [
-              clang-tools_19
-              clang_19
-              llvmPackages_19.libcxx
-              lldb_15
+              clang-tools
+              clang
+              libcxx
+              lldb
               cmake
               fmt
               glfw
@@ -23,10 +23,11 @@
               freetype
               libGL
               libglvnd
-              linenoise-ng
+              linenoise
               fontconfig
               glm
               howard-hinnant-date
+              ninja_1_11
               # pkgs. IS necessary here. Otherwise nixgl as passed to outputs is used.
               pkgs.nixgl.auto.nixGLDefault
             ];
@@ -35,6 +36,7 @@
 CXX=clang++
 CC=clang
 '';
+            hardeningDisable = [ "all" ];
 
           };
         
